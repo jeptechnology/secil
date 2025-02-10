@@ -2,6 +2,9 @@
 /// @brief The Schneider-EME Comms Interface Library (SECIL) 
 ///        A library for communicating between Schneider Electric's Application Processor and EME's Thermostat Application.
 
+#if !defined(SECIL_H)
+#define SECIL_H
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -140,3 +143,5 @@ bool secil_send_localUiState(int8_t localUiState);
 #if defined(__cplusplus)
 }
 #endif
+
+#endif // SECIL_H

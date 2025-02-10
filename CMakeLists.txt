@@ -26,11 +26,20 @@ target_include_directories(secil PUBLIC include)
 
 # Add the examples to the build
 
-# Test
-add_executable(test 
-   examples/test.c
+# Loopback Test
+add_executable(loopback_test
+   examples/test_loopback.c
    examples/common.c)   
-target_link_libraries(test secil)
+target_link_libraries(loopback_test secil)
 
+# Linux UART Test
+add_executable(linux_se
+   examples/test_linux_fifo.c
+   examples/common.c)   
+target_link_libraries(linux_se secil)
 
+add_executable(linux_eme
+   examples/test_linux_fifo.c
+   examples/common.c)   
+target_link_libraries(linux_eme secil)
 
