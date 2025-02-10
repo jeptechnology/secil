@@ -4,9 +4,13 @@
 #include <string.h>
 
 static char buffer[1024];
-static size_t buffer_size = 0;
 static size_t start_pos = 0;
 static size_t end_pos = 0;
+
+static void log_fn(void *user_data, secil_log_severity_t severity, const char *message)
+{
+    printf("%s\n", message);
+}
 
 static bool read_fn(void *user_data, unsigned char *buf, size_t required_count)
 {
@@ -23,18 +27,15 @@ static bool read_fn(void *user_data, unsigned char *buf, size_t required_count)
 
 static bool write_fn(void *user_data, const unsigned char *buf, size_t count)
 {
-    if (buffer_size + count > sizeof(buffer))
+    if (end_pos + count > sizeof(buffer))
     {
         return false;
     }
 
-    memcpy(buffer + buffer_size, buf, count);
-    return true;
-}
+    memcpy(buffer + end_pos, buf, count);
+    end_pos += count;
 
-static void log_fn(void *user_data, secil_log_severity_t severity, const char *message)
-{
-    printf("%s\n", message);
+    return true;
 }
 
 void inject_error(size_t bytes)
