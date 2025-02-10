@@ -82,12 +82,6 @@ typedef union {
     secil_localUiState localUiState;
 } secil_message_payload;
 
-/// @brief A callback function that is called when a message is received.
-/// @param user_data The user data.
-/// @param type The type of message that was received.
-/// @param message The message that was received.
-typedef void (*secil_on_message_received_fn)(void *user_data, secil_message_type_t type, const secil_message_payload *message);
-
 /// @brief The severity of a log message.
 typedef enum {
     secil_LOG_DEBUG,
@@ -113,7 +107,6 @@ typedef struct secil_handle_s secil_handle_t;
 /// @return True if the comms interface library was initialized successfully, false otherwise.
 bool secil_init(secil_read_fn read_callback, 
                 secil_write_fn write_callback,
-                secil_on_message_received_fn on_message,
                 secil_log_fn logger,
                 void *user_data);
 
@@ -122,9 +115,10 @@ bool secil_init(secil_read_fn read_callback,
 void secil_deinit();
 
 /// @brief The main loop of the eme_se_comms library - this function should be called repeatedly in a loop.
-/// @param handle The handle to the eme_se_comms library.
-/// @return True if the main loop ran successfully, false otherwise.
-bool secil_loop(unsigned int max_iterations);
+/// @param type The type of message that was received.
+/// @param message The message that was received.
+/// @return True if we successfully received a message, false otherwise.
+bool secil_receive(secil_message_type_t* type, secil_message_payload *message);
 
 /// @brief Send messages to the eme_se_comms library.
 /// @param <various> parameters depending on the message type.

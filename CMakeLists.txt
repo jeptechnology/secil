@@ -24,3 +24,13 @@ target_link_libraries(secil nanopb)
 # All other includes are used internally by the library
 target_include_directories(secil PUBLIC include)
 
+# Add the examples to the build
+
+# Test
+add_executable(test 
+   examples/test.c
+   examples/common.c)   
+target_link_libraries(test secil)
+
+
+

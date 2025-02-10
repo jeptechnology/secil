@@ -8,19 +8,18 @@
 static struct {
     secil_read_fn read_callback;
     secil_write_fn write_callback;
-    secil_on_message_received_fn on_message;
     secil_log_fn logger;
     void *user_data;
 } state;
 
 /// @brief Check if the current state is valid.
 /// @return True if the current state is valid, false otherwise.
-static bool msmt_is_state_valid()
+static bool secil_is_state_valid()
 {
-    return state.read_callback && state.write_callback && state.on_message;
+    return state.read_callback && state.write_callback;
 }
 
-static void msmt_log(secil_log_severity_t severity, const char *message)
+static void secil_log(secil_log_severity_t severity, const char *message)
 {
     if (state.logger)
     {
@@ -33,7 +32,7 @@ static void msmt_log(secil_log_severity_t severity, const char *message)
 /// @param buf - The buffer.
 /// @param count - The count.
 /// @return true if the read was successful, false otherwise.
-static bool msmt_read_callback(pb_istream_t *stream, pb_byte_t *buf, size_t count)
+static bool secil_read_callback(pb_istream_t *stream, pb_byte_t *buf, size_t count)
 {
     return state.read_callback(state.user_data, buf, count);
 }
@@ -42,17 +41,17 @@ static bool msmt_read_callback(pb_istream_t *stream, pb_byte_t *buf, size_t coun
 /// @param stream - The stream.
 /// @param buf - The buffer.
 /// @param count - The count.
-static bool msmt_write_callback(pb_ostream_t *stream, const pb_byte_t *buf, size_t count)
+static bool secil_write_callback(pb_ostream_t *stream, const pb_byte_t *buf, size_t count)
 {
     return state.write_callback(state.user_data, buf, count);
 }
 
 /// @brief Creates an pb input stream from the given state.
 /// @return An instance of a pb_istream_t structure.
-static pb_istream_t msmt_create_istream()
+static pb_istream_t secil_create_istream()
 {
     pb_istream_t stream;
-    stream.callback = &msmt_read_callback;
+    stream.callback = &secil_read_callback;
     stream.state = state.user_data;
     stream.bytes_left = 4096; // 4KB max message size: adjust as needed
 #ifndef PB_NO_ERRMSG
@@ -63,19 +62,19 @@ static pb_istream_t msmt_create_istream()
 
 /// @brief Creates an pb output stream from the given state.
 /// @return An instance of a pb_ostream_t structure.
-static pb_ostream_t msmt_create_ostream()
+static pb_ostream_t secil_create_ostream()
 {
     pb_ostream_t stream;
-    stream.callback = &msmt_write_callback;
+    stream.callback = &secil_write_callback;
     stream.state = state.user_data;
     stream.max_size = 4096; // 4KB max message size: adjust as needed
     stream.bytes_written = 0;
     return stream;
 }
 
-static void msmt_skip_to_next_null(pb_istream_t* stream)
+static void secil_skip_to_next_null(pb_istream_t* stream)
 {
-    if (!msmt_is_state_valid())
+    if (!secil_is_state_valid())
     {
         return;
     }
@@ -91,18 +90,16 @@ static void msmt_skip_to_next_null(pb_istream_t* stream)
 /// @param user_data The user data.
 /// @return True if the eme_se_comms library was initialized successfully, false otherwise.
 bool secil_init(secil_read_fn read_callback, 
-                     secil_write_fn write_callback,
-                     secil_on_message_received_fn on_message,
-                     secil_log_fn logger,
-                     void *user_data)
+                secil_write_fn write_callback,
+                secil_log_fn logger,
+                void *user_data)
 {
     state.read_callback = read_callback;
     state.write_callback = write_callback;
-    state.on_message = on_message;
     state.logger = logger;
     state.user_data = user_data;
 
-    return msmt_is_state_valid();
+    return secil_is_state_valid();
 }
 
 /// @brief Deinitializes the eme_se_comms library.
@@ -111,53 +108,57 @@ void secil_deinit()
 {
     state.read_callback = NULL;
     state.write_callback = NULL;
-    state.on_message = NULL;
     state.logger = NULL;
     state.user_data = NULL;
 }
 
-/// @brief The main loop of the eme_se_comms library - this function should be called repeatedly in a loop.
-/// @param handle The handle to the eme_se_comms library.
+/// @brief Receive a message from the stream.
+/// @param type The type of the message (not null).
+/// @param payload The payload of the message (not null).
 /// @return True if the main loop ran successfully, false otherwise.
-bool secil_loop(unsigned int max_iterations)
+bool secil_receive(secil_message_type_t* type, secil_message_payload *payload)
 {
-    if (!msmt_is_state_valid())
+    if (!secil_is_state_valid())
     {
-        msmt_log(secil_LOG_ERROR, "Cannot invoke loop - Invalid state. Have you initialised the library?");
+        secil_log(secil_LOG_ERROR, "Cannot invoke loop - Invalid state. Have you initialised the library?");
         return false;
     }
 
-    pb_istream_t stream = msmt_create_istream();
-
-    for (unsigned int i = 0; i < max_iterations; i++)
+    if (!type || !payload)
     {
-        msmt_skip_to_next_null(&stream);
-        
-        // Decode a message
-        SecilMessage message = SecilMessage_init_zero;
-        if (!pb_decode_ex(&stream, SecilMessage_fields, &message, PB_DECODE_NOINIT | PB_DECODE_DELIMITED))
-        {
-            msmt_log(secil_LOG_WARNING, "Cannot decode message");
-            msmt_log(secil_LOG_WARNING, stream.errmsg);
-
-            return false;
-        }
-
-        // Handle the message
-        state.on_message(state.user_data, (secil_message_type_t)message.which_payload, (const secil_message_payload*)&message.payload);
+        secil_log(secil_LOG_ERROR, "Cannot invoke loop - Invalid arguments.");
+        return false;
     }
+
+    pb_istream_t stream = secil_create_istream();
+
+    secil_skip_to_next_null(&stream);
+    
+    // Decode a message
+    SecilMessage message = SecilMessage_init_zero;
+    if (!pb_decode_ex(&stream, SecilMessage_fields, &message, PB_DECODE_NOINIT | PB_DECODE_DELIMITED))
+    {
+        secil_log(secil_LOG_WARNING, "Cannot decode message");
+        secil_log(secil_LOG_WARNING, stream.errmsg);
+
+        return false;
+    }
+
+    // Handle the message
+    *type = (secil_message_type_t)message.which_payload;
+    memcpy(payload, &message.payload, sizeof(secil_message_payload));
 
     return true;
 }
 
 static bool secil_send(const SecilMessage* message)
 {
-    if (!msmt_is_state_valid())
+    if (!secil_is_state_valid())
     {
         return false;
     }
 
-    pb_ostream_t stream = msmt_create_ostream();
+    pb_ostream_t stream = secil_create_ostream();
     
     // Write null terminator, followed by the message to the stream
     pb_byte_t null_byte = 0;
