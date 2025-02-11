@@ -69,6 +69,7 @@ static pb_ostream_t secil_create_ostream()
     stream.state = state.user_data;
     stream.max_size = 4096; // 4KB max message size: adjust as needed
     stream.bytes_written = 0;
+    stream.errmsg = NULL;
     return stream;
 }
 
