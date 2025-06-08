@@ -7,7 +7,7 @@
 
 typedef struct
 {
-    char buffer[1024];
+    char buffer[1024*1024]; // 1 MB buffer for the memory stream
     size_t read_index;
     size_t write_index;
 } memory_buffer_t;
@@ -85,6 +85,8 @@ int main(int argc, char **argv)
 {
     memory_buffer_t memory_buffer = {0}; // Initialize the memory buffer
 
+    const int total_test_iterations = 10000; // Total number of test iterations
+
     // Initialize the library using our loopback example code above that uses a ram based buffer
     secil_init(
         read_fn,
@@ -92,29 +94,37 @@ int main(int argc, char **argv)
         log_fn,
         &memory_buffer); // Pass the memory buffer as the user data
 
-    // inject an error of 10 random bytes to the stream
-    inject_loopback_error(10, &memory_buffer);
+    for (int i = 0; i < total_test_iterations; i++)
+    {
+        // inject an error of 10 random bytes to the stream
+        inject_loopback_error(10, &memory_buffer);
 
-    // Send some valid messages - note: we expect to read these back later.
-    secil_send_accessoryState(true);
-    secil_send_autoWake(1);
-    secil_send_awayMode(false);
-    secil_send_currentTemperature('2');
+        // Send some valid messages - note: we expect to read these back later.
+        secil_send_accessoryState(true);
+        secil_send_autoWake(1);
+        secil_send_awayMode(false);
+        secil_send_currentTemperature('2');
 
-    // inject an error of 1 random byte to the stream
-    inject_loopback_error(1, &memory_buffer);
+        // inject an error of 1 random byte to the stream
+        inject_loopback_error(1, &memory_buffer);
 
-    // Send some more valid messages
-    secil_send_demandResponse(true);
-    secil_send_localUiState(3);
-    secil_send_relativeHumidity(50);
-    secil_send_supportPackageData("Hello, world!");
+        // Send some more valid messages
+        secil_send_demandResponse(true);
+        secil_send_localUiState(3);
+        secil_send_relativeHumidity(50);
+        secil_send_supportPackageData("Hello, world!");
+    }
 
     // Receive some messages - we should expect to receive the same as the ones we sent
     int failures = 0;
     int attempts = 0;
     int messages = 0;
-    while (failures < 3 && messages < 8)
+    bool last_was_error = false;
+    int recoveries = 0;
+    int current_error_sequence = 0;
+    int longest_error_sequence = 0;
+
+    while (memory_buffer.read_index < memory_buffer.write_index)
     {
         attempts++;
 
@@ -124,19 +134,41 @@ int main(int argc, char **argv)
         if (!secil_receive(&type, &payload))
         {
             failures++;
+            if (last_was_error)
+            {
+                current_error_sequence++;
+            }
+            else
+            {
+                current_error_sequence = 1; // Reset the sequence count
+            }
+            last_was_error = true;
+
+            if (current_error_sequence > longest_error_sequence)
+            {
+                longest_error_sequence = current_error_sequence; // Update the longest error sequence
+            }
         }
         else
         {
             messages++;
+            if (last_was_error)
+            {
+                recoveries++;
+                last_was_error = false;
+            }
             log_message_received(type, &payload);
         }
     }
 
-    printf("Total sent messages: 8\n");
+    printf("Total sent messages: %d\n", total_test_iterations * 8); // 8 messages per iteration
     printf("Total read attempts: %d\n", attempts);
     printf("Total read messages: %d\n", messages);
     printf("Total read failures: %d\n", failures);
-    printf("Success rate: %d.%02d%%\n", (int)((messages / 8.0) * 100), (int)((messages / 8.0) * 10000) % 100);
+    printf("Total injected errors: %d\n", (total_test_iterations * 2)); // 10 + 1 bytes per iteration
+    printf("Total recoveries: %d\n", recoveries);
+    printf("Longest sequence of errors: %d\n", longest_error_sequence);
+    printf("Success rate: %d.%02d%%\n", (int)((messages / (float)attempts) * 100), (int)((messages / (float)attempts) * 10000) % 100);
 
     return 0;
 }
