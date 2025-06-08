@@ -62,6 +62,10 @@ typedef struct _localUiState {
     int8_t localUiState;
 } localUiState;
 
+typedef struct _dateAndTime {
+    uint64_t dateAndTime;
+} dateAndTime;
+
 typedef struct _SecilMessage {
     int32_t id;
     pb_size_t which_payload;
@@ -79,6 +83,7 @@ typedef struct _SecilMessage {
         awayMode awayMode;
         autoWake autoWake;
         localUiState localUiState;
+        dateAndTime dateAndTime;
     } payload;
 } SecilMessage;
 
@@ -101,6 +106,7 @@ extern "C" {
 #define awayMode_init_default                    {0}
 #define autoWake_init_default                    {0}
 #define localUiState_init_default                {0}
+#define dateAndTime_init_default                 {0}
 #define SecilMessage_init_default                {0, 0, {currentTemperature_init_default}}
 #define currentTemperature_init_zero             {0}
 #define heatingSetpoint_init_zero                {0}
@@ -115,6 +121,7 @@ extern "C" {
 #define awayMode_init_zero                       {0}
 #define autoWake_init_zero                       {0}
 #define localUiState_init_zero                   {0}
+#define dateAndTime_init_zero                    {0}
 #define SecilMessage_init_zero                   {0, 0, {currentTemperature_init_zero}}
 
 /* Field tags (for use in manual encoding/decoding) */
@@ -131,6 +138,7 @@ extern "C" {
 #define awayMode_awayMode_tag                    1
 #define autoWake_autoWake_tag                    1
 #define localUiState_localUiState_tag            1
+#define dateAndTime_dateAndTime_tag              1
 #define SecilMessage_id_tag                      1
 #define SecilMessage_currentTemperature_tag      2
 #define SecilMessage_heatingSetpoint_tag         3
@@ -145,6 +153,7 @@ extern "C" {
 #define SecilMessage_awayMode_tag                12
 #define SecilMessage_autoWake_tag                13
 #define SecilMessage_localUiState_tag            14
+#define SecilMessage_dateAndTime_tag             15
 
 /* Struct field encoding specification for nanopb */
 #define currentTemperature_FIELDLIST(X, a) \
@@ -212,6 +221,11 @@ X(a, STATIC,   REQUIRED, INT32,    localUiState,      1)
 #define localUiState_CALLBACK NULL
 #define localUiState_DEFAULT NULL
 
+#define dateAndTime_FIELDLIST(X, a) \
+X(a, STATIC,   REQUIRED, UINT64,   dateAndTime,       1)
+#define dateAndTime_CALLBACK NULL
+#define dateAndTime_DEFAULT NULL
+
 #define SecilMessage_FIELDLIST(X, a) \
 X(a, STATIC,   REQUIRED, INT32,    id,                1) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,currentTemperature,payload.currentTemperature),   2) \
@@ -226,7 +240,8 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (payload,supportPackageData,payload.supportPa
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,demandResponse,payload.demandResponse),  11) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,awayMode,payload.awayMode),  12) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (payload,autoWake,payload.autoWake),  13) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (payload,localUiState,payload.localUiState),  14)
+X(a, STATIC,   ONEOF,    MESSAGE,  (payload,localUiState,payload.localUiState),  14) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (payload,dateAndTime,payload.dateAndTime),  15)
 #define SecilMessage_CALLBACK NULL
 #define SecilMessage_DEFAULT NULL
 #define SecilMessage_payload_currentTemperature_MSGTYPE currentTemperature
@@ -242,6 +257,7 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (payload,localUiState,payload.localUiState), 
 #define SecilMessage_payload_awayMode_MSGTYPE awayMode
 #define SecilMessage_payload_autoWake_MSGTYPE autoWake
 #define SecilMessage_payload_localUiState_MSGTYPE localUiState
+#define SecilMessage_payload_dateAndTime_MSGTYPE dateAndTime
 
 extern const pb_msgdesc_t currentTemperature_msg;
 extern const pb_msgdesc_t heatingSetpoint_msg;
@@ -256,6 +272,7 @@ extern const pb_msgdesc_t demandResponse_msg;
 extern const pb_msgdesc_t awayMode_msg;
 extern const pb_msgdesc_t autoWake_msg;
 extern const pb_msgdesc_t localUiState_msg;
+extern const pb_msgdesc_t dateAndTime_msg;
 extern const pb_msgdesc_t SecilMessage_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
@@ -272,6 +289,7 @@ extern const pb_msgdesc_t SecilMessage_msg;
 #define awayMode_fields &awayMode_msg
 #define autoWake_fields &autoWake_msg
 #define localUiState_fields &localUiState_msg
+#define dateAndTime_fields &dateAndTime_msg
 #define SecilMessage_fields &SecilMessage_msg
 
 /* Maximum encoded size of messages (where known) */
@@ -284,6 +302,7 @@ extern const pb_msgdesc_t SecilMessage_msg;
 #define awayMode_size                            2
 #define coolingSetpoint_size                     11
 #define currentTemperature_size                  11
+#define dateAndTime_size                         11
 #define demandResponse_size                      2
 #define heatingSetpoint_size                     11
 #define hvacMode_size                            11

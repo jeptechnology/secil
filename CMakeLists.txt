@@ -24,8 +24,6 @@ target_link_libraries(secil nanopb)
 # All other includes are used internally by the library
 target_include_directories(secil PUBLIC include)
 
-# Add the examples to the build
-
 # Loopback Test
 add_executable(loopback_test
    test/test_loopback.c
@@ -36,13 +34,13 @@ target_include_directories(loopback_test PUBLIC example)
 target_link_libraries(loopback_test secil)
 
 # Linux UART Test
-add_executable(linux_se
+add_executable(se_example
    example/se_example.c
    example/common.c)   
-target_link_libraries(linux_se secil)
+target_link_libraries(se_example secil)
 
-add_executable(linux_eme
+add_executable(eme_example
    example/eme_example.c
    example/common.c)   
-target_link_libraries(linux_eme secil)
+target_link_libraries(eme_example secil)
 

@@ -164,30 +164,53 @@ void log_message_received(secil_message_type_t type, secil_message_payload *payl
 {
     switch (type)
     {
-    case secil_message_type_accessoryState:
-        printf("Received Accessory state: %d\n", payload->accessoryState.accessoryState);
-        break;
-    case secil_message_type_autoWake:
-        printf("Received Auto wake: %d\n", payload->autoWake.autoWake);
-        break;
-    case secil_message_type_awayMode:
-        printf("Received Away mode: %d\n", payload->awayMode.awayMode);
-        break;
     case secil_message_type_currentTemperature:
-        printf("Received Current temperature: %d\n", payload->currentTemperature.currentTemperature);
+        printf("Received current temperature: %d\n", payload->currentTemperature.currentTemperature);
         break;
-    case secil_message_type_demandResponse:
-        printf("Received Demand response: %d\n", payload->demandResponse.demandResponse);
+    case secil_message_type_heatingSetpoint:
+        printf("Received heating setpoint: %d\n", payload->heatingSetpoint.heatingSetpoint);
         break;
-    case secil_message_type_localUiState:
-        printf("Received Local UI state: %d\n", payload->localUiState.localUiState);
+    case secil_message_type_awayHeatingSetpoint:
+        printf("Received away heating setpoint: %d\n", payload->awayHeatingSetpoint.awayHeatingSetpoint);
+        break;
+    case secil_message_type_coolingSetpoint:            
+        printf("Received cooling setpoint: %d\n", payload->coolingSetpoint.coolingSetpoint);
+        break;
+    case secil_message_type_awayCoolingSetpoint:
+        printf("Received away cooling setpoint: %d\n", payload->awayCoolingSetpoint.awayCoolingSetpoint);
+        break;
+    case secil_message_type_hvacMode:
+        printf("Received HVAC mode: %d\n", payload->hvacMode.hvacMode);
         break;
     case secil_message_type_relativeHumidity:
-        printf("Received Relative humidity: %d\n", payload->relativeHumidity.relativeHumidity);
+        printf("Received relative humidity: %s\n", payload->relativeHumidity.relativeHumidity ? "true" : "false");
+        break;
+    case secil_message_type_accessoryState:
+        printf("Received accessory state: %s\n", payload->accessoryState.accessoryState ? "true" : "false");
         break;
     case secil_message_type_supportPackageData:
-        printf("Received Support package data: %s\n", payload->supportPackageData.supportPackageData);
+        printf("Received support package data: %s\n", payload->supportPackageData.supportPackageData);
         break;
+    case secil_message_type_demandResponse:
+        printf("Received demand response: %s\n", payload->demandResponse.demandResponse ? "true" : "false");
+        break;
+    case secil_message_type_awayMode:
+        printf("Received away mode: %s\n", payload->awayMode.awayMode ? "true" : "false");
+        break;
+    case secil_message_type_autoWake:
+        printf("Received auto wake: %s\n", payload->autoWake.autoWake ? "true" : "false");
+        break;
+    case secil_message_type_localUiState:
+        printf("Received local UI state: %d\n", payload->localUiState.localUiState);
+        break;
+    case secil_message_type_dateTime:
+        printf("Received date time: %llu\n", (unsigned long long)payload->dateTime.dataTime);
+        break;
+    
+    // Add cases for any other message types you expect to receive
+    // ....
+    // ....
+
     default:
         printf("Received unknown message type: %d\n", type);
         break;

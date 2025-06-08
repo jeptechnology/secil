@@ -45,6 +45,9 @@ PB_BIND(autoWake, autoWake, AUTO)
 PB_BIND(localUiState, localUiState, AUTO)
 
 
+PB_BIND(dateAndTime, dateAndTime, AUTO)
+
+
 PB_BIND(SecilMessage, SecilMessage, 2)
 
 

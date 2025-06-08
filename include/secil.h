@@ -91,6 +91,10 @@ extern "C"
     {
         int8_t localUiState;
     } secil_localUiState;
+    typedef struct
+    {
+        uint64_t dataTime; // Unix timestamp in seconds
+    } secil_dateTime;
 
     typedef enum
     {
@@ -106,7 +110,8 @@ extern "C"
         secil_message_type_demandResponse = 11,
         secil_message_type_awayMode = 12,
         secil_message_type_autoWake = 13,
-        secil_message_type_localUiState = 14
+        secil_message_type_localUiState = 14,
+        secil_message_type_dateTime = 15
     } secil_message_type_t;
 
     /// @brief A union of all possible message types.
@@ -125,6 +130,7 @@ extern "C"
         secil_awayMode awayMode;
         secil_autoWake autoWake;
         secil_localUiState localUiState;
+        secil_dateTime dateTime;
     } secil_message_payload;
 
     /// @brief The severity of a log message.
