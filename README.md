@@ -58,44 +58,56 @@ You should open two terminals, go to the build folder and launch both of these a
 Each application will give you several options.
 Once you begin the "receive messages" loop, the application will continue to receive messages until 
 
-## Use in your project
+## Integrate the comms linbrary in your project
 
-In your project, enure you have linked the library and have access to its header files.
+To use this libray in your own project, enure you have linked the library and have access to its header files.
 
 Then proceed as follows:
 
 ```C
 #include "secil.h"
 
-// Setup your UARTs
+// Setup your UARTs (platform specific)
 
-// Implement some functions to read and write from your uarts:
-bool your_uart_read_fn(void *user_data, unsigned char *buf, size_t required_count);
-bool your_uart_write_fn(void *user_data, const unsigned char *buf, size_t count);
+// Implement some functions to read and write from your uarts (we assume you have created these)
+bool my_uart_read_fn(void *user_data, unsigned char *buf, size_t required_count);
+bool my_uart_write_fn(void *user_data, const unsigned char *buf, size_t count);
 
-void *user_data = NULL; // Your user_data can be stored here - it will be passed to the read/write functions
+// Optionally implement a log function
+void my_log_fn(void *user_data, secil_log_severity_t severity, const char *message);
 
-// Initialise the library:
-bool secil_init_ok = secil_init(your_uart_read_fn, your_uart_read_fn, log_fn, user_data);
+// Optionally, point to your own user_data which will be passed to all the callback functions above
+// e.g. you may wish to point to a structure holding information about your UART config
+void *user_data = NULL; 
+
+// Initialise the library, passing in an optional log function:
+bool secil_init_ok = secil_init(my_uart_read_fn, 
+                                my_uart_read_fn, 
+                                my_log_fn, 
+                                user_data);
 ```
 
 Start a background task / thread to process new messages as they arrive:
 
 ```C
-while (!end)
+// An example main loop for processing received messages
+void my_main_processing_loop()
 {
-   secil_message_type_t type; // This will be written with the type of message received.
-   secil_message_payload payload; // This will be written with the payload - which is a union of well typed message data.
-                                  // NOTE: up to 256 bytes in size, keep an eye on stack usage if tight.
+   while (!end)
+   {
+      secil_message_type_t type; // This will be written with the type of message received.
+      secil_message_payload payload; // This will be written with the payload - which is a union of well typed message data.
+                                    // NOTE: up to 256 bytes in size, keep an eye on stack usage if tight.
 
-   // Receive the next message
-   if (secil_receive(&type, &payload))
-   {
-      // Do something with this message
-   }
-   else
-   {
-      printf("Failed to receive message.\n");
+      // Receive the next message
+      if (secil_receive(&type, &payload))
+      {
+         // Do something with this message
+      }
+      else
+      {
+         printf("Failed to receive message.\n");
+      }
    }
 }
 ```
@@ -103,8 +115,9 @@ while (!end)
 Elsewhere in your project, you can send messages whenever you need to:
 
 ```C
+// NOTE: Sending messages from multiple threads is not supported.
+//       However, it is safe to send from a different thread to the main processing thread.
 secil_send_currentTemperature(200);
 secil_send_heatingSetpoint(250);
 secil_send_hvacMode(1);
 ```
-
