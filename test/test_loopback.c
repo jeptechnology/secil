@@ -5,7 +5,7 @@
 
 #include "common.h"
 
-typedef struct 
+typedef struct
 {
     char buffer[1024];
     size_t read_index;
@@ -81,18 +81,17 @@ void inject_loopback_error(size_t bytes, memory_buffer_t *memory_buffer)
     }
 }
 
-
 int main(int argc, char **argv)
-{ 
+{
     memory_buffer_t memory_buffer = {0}; // Initialize the memory buffer
-    
+
     // Initialize the library using our loopback example code above that uses a ram based buffer
     secil_init(
-        read_fn, 
+        read_fn,
         write_fn,
-        log_fn,    
+        log_fn,
         &memory_buffer); // Pass the memory buffer as the user data
-    
+
     // inject an error of 10 random bytes to the stream
     inject_loopback_error(10, &memory_buffer);
 

@@ -59,7 +59,8 @@ int main()
             }
             break;
          case 4:
-            {
+           while(1) 
+           {
                secil_message_type_t type;
                secil_message_payload payload;
 
@@ -70,6 +71,7 @@ int main()
                else
                {
                   printf("Failed to receive message.\n");
+                  break;
                }
             }
             break;

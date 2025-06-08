@@ -130,16 +130,20 @@ int main()
       }
       case 10:
       {
-         secil_message_type_t type;
-         secil_message_payload payload;
+         while (1)
+         {
+            secil_message_type_t type;
+            secil_message_payload payload;
 
-         if (secil_receive(&type, &payload))
-         {
-            log_message_received(type, &payload);
-         }
-         else
-         {
-            printf("Failed to receive message.\n");
+            if (secil_receive(&type, &payload))
+            {
+               log_message_received(type, &payload);
+            }
+            else
+            {
+               printf("Failed to receive message.\n");
+               break;
+            }
          }
          break;
       }

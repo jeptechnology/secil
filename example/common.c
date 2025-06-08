@@ -5,6 +5,12 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/select.h>
+#include <string.h>
+#include <errno.h>  
 
 static struct
 {
@@ -97,24 +103,47 @@ static void log_fn(void *user_data, secil_log_severity_t severity, const char *m
 static bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
 {
     // keep reading from global uart until we have the required number of bytes
-    size_t total_read = 0;
-    while (total_read < required_count)
+    // NOTE: The uart is non-blocking, so we need to wait for data to be available with the select() function.
+    ssize_t bytes_read = 0;
+    size_t total_bytes_read = 0;
+    fd_set g_fds;
+    struct timeval timeout; 
+    timeout.tv_sec = 120; // 2 minutes timeout
+    timeout.tv_usec = 0;
+    while (total_bytes_read < required_count)
     {
-        ssize_t bytes_read = read(g_secil_context.uart_fd, buf + total_read, required_count - total_read);
+        FD_ZERO(&g_fds);
+        FD_SET(g_secil_context.uart_fd, &g_fds);
+
+        // Wait for data to be available on the UART
+        int select_result = select(g_secil_context.uart_fd + 1, &g_fds, NULL, NULL, &timeout);
+        if (select_result < 0)
+        {
+            perror("select failed");
+            return false;
+        }
+        else if (select_result == 0)
+        {
+            printf("Timeout waiting for data on UART\n");
+            return false; // Timeout
+        }
+
+        // Read from the UART
+        bytes_read = read(g_secil_context.uart_fd, buf + total_bytes_read, required_count - total_bytes_read);
         if (bytes_read < 0)
         {
             perror("Failed to read from UART");
             return false;
         }
-        if (bytes_read == 0)
-        {
-            // No more data available
-            break;
-        }
-        total_read += bytes_read;
+        
+        total_bytes_read += bytes_read;
     }
-
-    return total_read == required_count;
+    if (total_bytes_read != required_count)
+    {
+        fprintf(stderr, "Expected %zu bytes, but read %zu bytes\n", required_count, total_bytes_read);
+        return false;
+    }
+    return true; // Successfully read the required number of bytes
 }
 
 static bool write_uart(void *user_data, const unsigned char *buf, size_t count)

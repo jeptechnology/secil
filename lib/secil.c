@@ -5,7 +5,8 @@
 #include <pb_decode.h>
 #include "secil.pb.h"
 
-static struct {
+static struct
+{
     secil_read_fn read_callback;
     secil_write_fn write_callback;
     secil_log_fn logger;
@@ -73,14 +74,15 @@ static pb_ostream_t secil_create_ostream()
     return stream;
 }
 
-static void secil_skip_to_next_null(pb_istream_t* stream)
+static void secil_skip_to_next_null(pb_istream_t *stream)
 {
     if (!secil_is_state_valid())
     {
         return;
     }
     pb_byte_t byte;
-    while (state.read_callback(state.user_data, &byte, 1) && byte != 0);
+    while (state.read_callback(state.user_data, &byte, 1) && byte != 0)
+        ;
 }
 
 /// @brief Initializes the eme_se_comms library.
@@ -90,7 +92,7 @@ static void secil_skip_to_next_null(pb_istream_t* stream)
 /// @param logger The logger callback function (optional - can be null).
 /// @param user_data The user data.
 /// @return True if the eme_se_comms library was initialized successfully, false otherwise.
-bool secil_init(secil_read_fn read_callback, 
+bool secil_init(secil_read_fn read_callback,
                 secil_write_fn write_callback,
                 secil_log_fn logger,
                 void *user_data)
@@ -117,7 +119,7 @@ void secil_deinit()
 /// @param type The type of the message (not null).
 /// @param payload The payload of the message (not null).
 /// @return True if the main loop ran successfully, false otherwise.
-bool secil_receive(secil_message_type_t* type, secil_message_payload *payload)
+bool secil_receive(secil_message_type_t *type, secil_message_payload *payload)
 {
     if (!secil_is_state_valid())
     {
@@ -134,7 +136,7 @@ bool secil_receive(secil_message_type_t* type, secil_message_payload *payload)
     pb_istream_t stream = secil_create_istream();
 
     secil_skip_to_next_null(&stream);
-    
+
     // Decode a message
     SecilMessage message = SecilMessage_init_zero;
     if (!pb_decode_ex(&stream, SecilMessage_fields, &message, PB_DECODE_NOINIT | PB_DECODE_DELIMITED))
@@ -152,7 +154,7 @@ bool secil_receive(secil_message_type_t* type, secil_message_payload *payload)
     return true;
 }
 
-static bool secil_send(const SecilMessage* message)
+static bool secil_send(const SecilMessage *message)
 {
     if (!secil_is_state_valid())
     {
@@ -160,11 +162,10 @@ static bool secil_send(const SecilMessage* message)
     }
 
     pb_ostream_t stream = secil_create_ostream();
-    
+
     // Write null terminator, followed by the message to the stream
     pb_byte_t null_byte = 0;
-    return pb_write(&stream, &null_byte, 1)
-        && pb_encode_ex(&stream, SecilMessage_fields, message, PB_ENCODE_DELIMITED);
+    return pb_write(&stream, &null_byte, 1) && pb_encode_ex(&stream, SecilMessage_fields, message, PB_ENCODE_DELIMITED);
 }
 
 bool secil_send_currentTemperature(int8_t currentTemperature)
@@ -270,5 +271,3 @@ bool secil_send_localUiState(int8_t localUiState)
     message.payload.localUiState.localUiState = localUiState;
     return secil_send(&message);
 }
-
-
