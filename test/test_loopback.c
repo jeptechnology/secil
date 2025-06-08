@@ -1,7 +1,9 @@
 #include <secil.h>
-#include "common.h"
-
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include "common.h"
 
 typedef struct 
 {
@@ -79,42 +81,6 @@ void inject_loopback_error(size_t bytes, memory_buffer_t *memory_buffer)
     }
 }
 
-/// @brief Log the message received.
-/// @param type - The type of the message.
-/// @param payload - The payload of the message.
-void log_message_received(secil_message_type_t type, secil_message_payload* payload)
-{
-    switch (type)
-    {
-    case secil_message_type_accessoryState:
-        printf("Received Accessory state: %d\n", payload->accessoryState.accessoryState);
-        break;
-    case secil_message_type_autoWake:
-        printf("Received Auto wake: %d\n", payload->autoWake.autoWake);
-        break;
-    case secil_message_type_awayMode:
-        printf("Received Away mode: %d\n", payload->awayMode.awayMode);
-        break;
-    case secil_message_type_currentTemperature:
-        printf("Received Current temperature: %d\n", payload->currentTemperature.currentTemperature);
-        break;
-    case secil_message_type_demandResponse:
-        printf("Received Demand response: %d\n", payload->demandResponse.demandResponse);
-        break;
-    case secil_message_type_localUiState:
-        printf("Received Local UI state: %d\n", payload->localUiState.localUiState);
-        break;
-    case secil_message_type_relativeHumidity:
-        printf("Received Relative humidity: %d\n", payload->relativeHumidity.relativeHumidity);
-        break;
-    case secil_message_type_supportPackageData:
-        printf("Received Support package data: %s\n", payload->supportPackageData.supportPackageData);
-        break;
-    default:
-        printf("Received unknown message type: %d\n", type);
-        break;
-    }
-}
 
 int main(int argc, char **argv)
 { 

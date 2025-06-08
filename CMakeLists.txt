@@ -28,18 +28,21 @@ target_include_directories(secil PUBLIC include)
 
 # Loopback Test
 add_executable(loopback_test
-   examples/test_loopback.c
-   examples/common.c)   
+   test/test_loopback.c
+   example/common.c
+)
+target_include_directories(loopback_test PUBLIC example)
+
 target_link_libraries(loopback_test secil)
 
 # Linux UART Test
 add_executable(linux_se
-   examples/test_linux_fifo.c
-   examples/common.c)   
+   example/se_example.c
+   example/common.c)   
 target_link_libraries(linux_se secil)
 
 add_executable(linux_eme
-   examples/test_linux_fifo.c
-   examples/common.c)   
+   example/eme_example.c
+   example/common.c)   
 target_link_libraries(linux_eme secil)
 
