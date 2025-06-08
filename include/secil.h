@@ -1,6 +1,6 @@
 /// @file secil.h
-/// @brief The Schneider-EME Comms Interface Library (SECIL)
-///        A library for communicating between Schneider Electric's Application Processor and EME's Thermostat Application.
+/// @brief The Schneider Electric Comms Interface Library (SECIL)
+///        A library for communicating between "Cloud" Processor and "Thermostat" Processor.
 
 #if !defined(SECIL_H)
 #define SECIL_H

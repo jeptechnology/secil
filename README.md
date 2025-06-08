@@ -1,5 +1,5 @@
 # Secil
-Schneider Electric to EME Comms Interface Library
+Schneider Electric Comms Interface Library
 
 ## Overview
 Secil is a library designed to wrap the complexity of the local UART comms between the two microcontrollers.
