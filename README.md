@@ -13,12 +13,14 @@ It is custom made for the specific data interface in our thermostat application.
    - Supply your own UART functions
    - No threads
 - Consistent C API for all messages
-- All serialisation / deserialisation of messaegs is taken care of.
+- All serialisation / deserialisation of messaegs is taken care of
 - Error handling in synchronisation
-- Easy integration to embedded systems
-  - Examples use CMake but there are only a few C files to include.
+  - Bad/corrupt messages are ignored
+  - Resynchronisation with incoming stream is performed automatically
+- Easily integrated to embedded C projects
+  - The examples use CMake but there are only a few C files to include
 
-NOTE: Under the hood, Secil uses the nanopb library (https://github.com/nanopb/nanopb) which enables us to delegate the serialisation to a well trusted 3rd party library. We can expand on this any time new requirements arise and new functions added to the libary.
+NOTE: Under the hood, Secil uses the nanopb library (https://github.com/nanopb/nanopb) which enables us to delegate the serialisation to a well trusted 3rd party library. We can add more messages to the interface as new requirements arise in future versions of this library.
 
 ## Installation
 
@@ -44,9 +46,13 @@ make
 
 ## Running the examples 
 
-We have two example applications that will talk to each other locally on the Linux system.
-They will attempt to create two psuedo TTYs via the `socat` command (this is done by whichever first launches)
-Each one will connect to either end of these TTYs and use them as if they are a UART.
+We have two example applications that will talk to each other locally on any Linux OS that has socat installed.
+Each example will check for the existence of psuedo TTYs at `/tmp/ttySE` and `tmp/ttyEME` and if they do not exist will use
+the `socat` command to create them. 
+
+NOTE: This means they can be launched in any order - but we recommend delaying for a couple of seconds before launching the second binary.
+
+Each example will connect to one end of these TTYs and use them as if they are a UART connection between them.
 
 You should open two terminals, go to the build folder and launch both of these applications:
 
@@ -55,12 +61,15 @@ You should open two terminals, go to the build folder and launch both of these a
 ./eme_example
 ```
 
-Each application will give you several options.
-Once you begin the "receive messages" loop, the application will continue to receive messages until 
+Each application will give you several options to allow you to send messages over the UART.
+The penultimate option to "receive messages" will enter a receive loop that will continue until the application is exited (Ctrl-C).
 
-## Integrate the comms linbrary in your project
+## Integrate the comms library in your project
 
-To use this libray in your own project, enure you have linked the library and have access to its header files.
+To use this library in your own project, enure you have either built the library or included all necessary source files:
+
+- Source files required are all *.c files inside the `lib` folder (recursive)
+- Ensure `include/secil.h` is available to the rest of your project
 
 Then proceed as follows:
 
