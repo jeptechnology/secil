@@ -14,21 +14,12 @@ extern "C"
 {
 #endif
 
-    typedef enum
-    {
-        secil_SUCCESS,
-        secil_ERROR,
-        secil_ERROR_INVALID_ARGUMENT,
-        secil_ERROR_INVALID_STATE,
-        secil_ERROR_INVALID_MESSAGE,
-        secil_ERROR_INVALID_PAYLOAD
-    } secil_error_t;
-
     /// @brief Signative for a callback function that reads required_count from a stream and writes to the given buffer.
     /// @param user_data The user data.
     /// @param buf The buffer to write to.
     /// @param required_count The number of bytes to read.
     /// @return True if we read required_count bytes successfully, false otherwise.
+    /// @note The read function should **block** until the required number of bytes is available, or return false if it cannot read the required number of bytes.
     typedef bool (*secil_read_fn)(void *user_data, unsigned char *buf, size_t required_count);
 
     /// @brief Signature for a callback function that writes count bytes from the given buffer to a stream.
@@ -147,9 +138,6 @@ extern "C"
     /// @param message The log message.
     typedef void (*secil_log_fn)(void *user_data, secil_log_severity_t severity, const char *message);
 
-    /// @brief A handle to the eme_se_comms library.
-    typedef struct secil_handle_s secil_handle_t;
-
     /// @brief Initializes the eme_se_comms library.
     /// @param read_callback The read callback function (required).
     /// @param write_callback The write callback function (required).
@@ -170,6 +158,8 @@ extern "C"
     /// @param type The type of message that was received.
     /// @param message The message that was received.
     /// @return True if we successfully received a message, false otherwise.
+    /// @warning This function will **block** until a message is received.
+    /// @note If there was a problem receiving a message, the function will attempt to log the error internally using the logger callback function.
     bool secil_receive(secil_message_type_t *type, secil_message_payload *message);
 
     /// @brief Send messages to the eme_se_comms library.
@@ -188,6 +178,7 @@ extern "C"
     bool secil_send_awayMode(bool awayMode);
     bool secil_send_autoWake(bool autoWake);
     bool secil_send_localUiState(int8_t localUiState);
+    bool secil_send_dateTime(uint64_t dataTime);
 
 #if defined(__cplusplus)
 }

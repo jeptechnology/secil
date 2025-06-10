@@ -130,3 +130,16 @@ secil_send_currentTemperature(200);
 secil_send_heatingSetpoint(250);
 secil_send_hvacMode(1);
 ```
+
+# TODO
+
+- Create a docker build environment.
+- Ensure that we can regenerate the nanopb generated files inside this repo.
+- Capture failures
+- Do we need acknowledgements for messages?
+  - Would require correlation ID
+  - Timeouts?
+  - Retries?
+  - Do we just "reset" the comms every time there is an error?
+- Do we need to know when both sides are ready? 
+  - Initial handshake messages?

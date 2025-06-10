@@ -7,7 +7,7 @@
 
 typedef struct
 {
-    char buffer[1024*1024]; // 1 MB buffer for the memory stream
+    char buffer[2*1024*1024]; // 2 MB buffer for the memory stream
     size_t read_index;
     size_t write_index;
 } memory_buffer_t;
@@ -100,19 +100,26 @@ int main(int argc, char **argv)
         inject_loopback_error(10, &memory_buffer);
 
         // Send some valid messages - note: we expect to read these back later.
-        secil_send_accessoryState(true);
-        secil_send_autoWake(1);
-        secil_send_awayMode(false);
-        secil_send_currentTemperature('2');
+        secil_send_currentTemperature(100);
+        secil_send_heatingSetpoint(89);
+        secil_send_awayHeatingSetpoint(75);
+        secil_send_coolingSetpoint(22);
+        secil_send_awayCoolingSetpoint(18);
+        secil_send_hvacMode(2); // Example HVAC mode
+        secil_send_relativeHumidity(true);
 
         // inject an error of 1 random byte to the stream
         inject_loopback_error(1, &memory_buffer);
 
         // Send some more valid messages
+        secil_send_accessoryState(false);
+        secil_send_supportPackageData("Support Package Data Example");
         secil_send_demandResponse(true);
-        secil_send_localUiState(3);
-        secil_send_relativeHumidity(50);
-        secil_send_supportPackageData("Hello, world!");
+        secil_send_awayMode(true);
+        secil_send_autoWake(false);
+        secil_send_localUiState(1);
+        secil_send_dateTime(1633036800); // Example date time (Unix timestamp for 2021-10-01 00:00:00 UTC)
+
     }
 
     // Receive some messages - we should expect to receive the same as the ones we sent
@@ -137,6 +144,11 @@ int main(int argc, char **argv)
             if (last_was_error)
             {
                 current_error_sequence++;
+                if (current_error_sequence > 10)
+                {
+                    // If we have more than 10 consecutive errors, inject a larger error
+                    printf("Long error sequence detected here\n");
+                }
             }
             else
             {
@@ -161,7 +173,7 @@ int main(int argc, char **argv)
         }
     }
 
-    printf("Total sent messages: %d\n", total_test_iterations * 8); // 8 messages per iteration
+    printf("Total sent messages: %d\n", total_test_iterations * 14); // 14 messages per iteration
     printf("Total read attempts: %d\n", attempts);
     printf("Total read messages: %d\n", messages);
     printf("Total read failures: %d\n", failures);

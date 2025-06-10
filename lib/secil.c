@@ -81,8 +81,7 @@ static void secil_skip_to_next_null(pb_istream_t *stream)
         return;
     }
     pb_byte_t byte;
-    while (state.read_callback(state.user_data, &byte, 1) && byte != 0)
-        ;
+    while (state.read_callback(state.user_data, &byte, 1) && byte != 0);
 }
 
 /// @brief Initializes the eme_se_comms library.
@@ -142,7 +141,7 @@ bool secil_receive(secil_message_type_t *type, secil_message_payload *payload)
     if (!pb_decode_ex(&stream, SecilMessage_fields, &message, PB_DECODE_NOINIT | PB_DECODE_DELIMITED))
     {
         secil_log(secil_LOG_WARNING, "Cannot decode message");
-        secil_log(secil_LOG_WARNING, stream.errmsg);
+        secil_log(secil_LOG_WARNING, stream.errmsg ? stream.errmsg : "Unknown error");
 
         return false;
     }
@@ -269,5 +268,13 @@ bool secil_send_localUiState(int8_t localUiState)
     SecilMessage message = SecilMessage_init_zero;
     message.which_payload = SecilMessage_localUiState_tag;
     message.payload.localUiState.localUiState = localUiState;
+    return secil_send(&message);
+}
+
+bool secil_send_dateTime(uint64_t dateTime)
+{
+    SecilMessage message = SecilMessage_init_zero;
+    message.which_payload = SecilMessage_dateAndTime_tag;
+    message.payload.dateAndTime.dateAndTime = dateTime;
     return secil_send(&message);
 }
