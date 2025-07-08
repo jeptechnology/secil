@@ -1,0 +1,78 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/cpp
+{
+   "name": "C++",
+   "build": {
+      "dockerfile": "Dockerfile",
+      "context": ".",
+      "options": [
+         "--network=host"
+      ]
+   },
+   // We need to run the container in privileged mode to access the serial ports and USB devices
+   "runArgs": [
+      "--network=host",
+      "--privileged",
+      "--device=/dev/ttyACM0",
+      "--device=/dev/ttyUSB0"
+   ],
+   "customizations": {
+      "vscode": {
+         // Add the IDs of extensions you want installed when the container is created
+         "extensions": [
+            "DavidAnson.vscode-markdownlint",
+            "eamodio.gitlens",
+            "github.copilot",
+            "github.vscode-pull-request-github",
+            "jbenden.c-cpp-flylint",
+            "matepek.vscode-catch2-test-adapter",
+            "mhutchie.git-graph",
+            "ms-vscode.cmake-tools",
+            "ms-vscode.cpptools-extension-pack",
+            "ms-vscode.cpptools",
+            "SiLabs.siliconLabsSupportExtension",
+            "tomoki1207.pdf"
+         ],
+         "settings": {
+            "cmake.generator": "Ninja",
+            // Setting this to ON can drastically reduce the 'configure' stage of CMake.
+            // It can be set to 'ON' once a successful configure has run. By setting this to
+            // ON CMake assumes all the fetched content is valid and does not try to update it.
+            // (see CMake docs for more details)
+            "cmake.configureSettings": {
+               "FETCHCONTENT_FULLY_DISCONNECTED": "OFF"
+            },
+            // We place all of our build-kits in their own directory. This means out build-kit names
+            // should contain no spaces.
+            "cmake.buildDirectory": "${workspaceFolder}/build/${buildKit}",
+            // We create compile_commands.json files in each build-kit but I currently don't know
+            // of a generic way to point at each of them (in the c_cpp_properties.json). To work
+            // around this we copy the current one to a generic location. Hopefully at some point
+            // we can remove this and generically reference it in the c_cpp_properties.json.
+            "cmake.copyCompileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "terminal.integrated.defaultProfile.linux": "bash"
+         }
+      }
+   },
+   // Mount USB devices
+   // Mount $HOME for access to ssh keys, ssh known_hosts, and .gitconfig
+   "mounts": [
+      "source=/dev/bus/usb,target=/dev/bus/usb,type=bind,consistency=cached",
+      "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/.host_user_home,type=bind,consistency=cached",
+      "source=/etc/ssl/certs/ca-certificates.crt,target=/usr/lib/ssl/cert.pem,type=bind,consistency=cached"
+   ],
+   // Start usbipd to pass through USB devices to WSL and container
+   // Run in WSL: `usbipd.exe list` to find the device hardware id
+   // Run in WSL: `echo "export HARDWARE_ID=<VID:PID>" >> $HOME/.bashrc` for example 303a:1001
+   "initializeCommand": {
+      "usb": "sudo usbipd.exe attach --auto-attach --wsl --hardware-id ${localEnv:HARDWARE_ID} &"
+   },
+   // Make sure the container uses our ssh keys, ssh known_hosts, and our .gitconfig
+   "postCreateCommand": {
+      "ssh": "cp --force --recursive /.host_user_home/.ssh ~/",
+      "git": "cp --force /.host_user_home/.gitconfig ~/",
+   },
+   "postStartCommand": {
+      "git_safe_directory": "git config --global --add safe.directory \"*\""
+   }
+}

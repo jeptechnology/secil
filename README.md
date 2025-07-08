@@ -133,8 +133,6 @@ secil_send_hvacMode(1);
 
 # TODO
 
-- Create a docker build environment.
-- Ensure that we can regenerate the nanopb generated files inside this repo.
 - Capture failures
 - Do we need acknowledgements for messages?
   - Would require correlation ID

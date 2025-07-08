@@ -3,22 +3,16 @@ project(secil)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -g -O0")
 
-# We are using the nanopb library here
-# NOTE: If you are already using nanopb in your project, you can skip this part
-#       and just add the nanopb library to your project
-add_library(nanopb
-   lib/nanopb/pb_common.c
-   lib/nanopb/pb_decode.c
-   lib/nanopb/pb_encode.c
-   )
-target_include_directories(nanopb PUBLIC lib/nanopb)
+# include the schema folder to build the protobuf files
+# This will generate the secil.pb.c and secil.pb.h files
+# The generated files will be placed in the lib folder
+add_subdirectory(schema)
 
 add_library(secil 
-   lib/secil.c
-   lib/secil.pb.c
-   )
+   source/secil.c
+)
 
-target_link_libraries(secil nanopb)
+target_link_libraries(secil schema)
 
 # Include path for secil is only the /include directory
 # All other includes are used internally by the library
@@ -44,3 +38,49 @@ add_executable(eme_example
    example/common.c)   
 target_link_libraries(eme_example secil)
 
+# Now we set up some install rules so that we can emplace the library and headers in the correct locations
+set(secil_install_dir "${CMAKE_CURRENT_BINARY_DIR}/install")
+
+# We want to create a directory structure like this:
+# install/
+# ├── CMakeLists.txt
+# ├── include
+# │   └── secil.h
+# └── source
+#     ├── secil.pb.h
+#     ├── secil.pb.c
+#     ├── pb.h
+#     ├── pb_common.h
+#     ├── pb_common.c
+#     ├── pb_decode.h
+#     ├── pb_decode.c
+#     ├── pb_encode.h
+#     ├── pb_encode.c
+#     └── secil.c
+
+install(
+   FILES 
+      install/CMakeLists.txt
+   DESTINATION ${secil_install_dir}
+)
+
+install(
+   FILES 
+      include/secil.h
+   DESTINATION ${secil_install_dir}/include
+)
+
+install(
+   FILES 
+      source/secil.c
+      ${CMAKE_BINARY_DIR}/schema/secil.pb.h
+      ${CMAKE_BINARY_DIR}/schema/secil.pb.c
+      nanopb/pb.h
+      nanopb/pb_common.h
+      nanopb/pb_common.c
+      nanopb/pb_decode.h
+      nanopb/pb_decode.c
+      nanopb/pb_encode.h
+      nanopb/pb_encode.c
+   DESTINATION ${secil_install_dir}/source
+)

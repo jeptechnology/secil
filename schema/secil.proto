@@ -1,0 +1,99 @@
+// A very simple protocol definition, consisting of only
+// one message.
+
+syntax = "proto2";
+
+import "nanopb.proto";
+
+// 1	Temperature	STM32	currentTemperature	int8	Both ESP32 and STM32 should know current temperature.
+// 2	Temperature	ESP32	heatingSetpoint	int8	When required, ESP32 shall communicate new heating setpoint to STM32.
+// 3	Temperature	ESP32	awayHeatingSetpoint	int8	When required, ESP32 shall communicate new away heating setpoint to STM32.
+// 4	Temperature	ESP32	coolingSetpoint	int8	When required, ESP32 shall communicate new cooling setpoint to STM32.
+// 5	Temperature	ESP32	awayCoolingSetpoint	int8	When required, ESP32 shall communicate new away cooling setpoint to STM32.
+// 6	HVAC	ESP32	hvacMode	enum	In order to have proper HVAC mode icon displayed on local UI and external interfaces, ESP32 and STM32 should exchange proper HVAC values. For Fan icon - it will be shown only if Fan mode is on, while Heat/Cool mode will not have the fan icon shown.
+// 7	HVAC	STM32	relativeHumidity	bool	Report on external interfaces the Current Relative Humidity.
+// 8	HVAC	STM32	accessoryState	bool	Report on external interfaces the Accessory state (Humidifier or Dehumidifier) state (On, Off).
+// 9	Feature	STM32	supportPackageData	string	STM32 to send it's part of data to ESP32 for support package, so ESP32 can send the whole package back to us for inspection.
+// 10	Feature	ESP32	demandResponse	bool	Demand Response shall be shown on both local UI and external interfaces.
+// 11	Feature	ESP32	awayMode	bool	In order to achieve proper mSMT behavior, the mSMT needs to know when the Away Mode is engaged.
+// 12	Feature	ESP32	autoWake	bool	In order to achieve proper mSMT behavior, the mSMT needs to know when the Away Wake is engaged.
+// 13	Device	ESP32	localUiState	enum	Refer to the machine state diagram to cover all values for enum.
+// 14	Device	STM32	dateAndTime u64 number of seconds since epoch
+
+message currentTemperature {
+    required int32 currentTemperature = 1 [(nanopb).int_size = IS_8];
+}
+
+message heatingSetpoint {
+    required int32 heatingSetpoint = 1 [(nanopb).int_size = IS_8];
+}
+
+message awayHeatingSetpoint {
+    required int32 awayHeatingSetpoint = 1 [(nanopb).int_size = IS_8];
+}
+
+message coolingSetpoint {
+    required int32 coolingSetpoint = 1 [(nanopb).int_size = IS_8];
+}
+
+message awayCoolingSetpoint {
+    required int32 awayCoolingSetpoint = 1 [(nanopb).int_size = IS_8];
+}
+
+message hvacMode {
+    required int32 hvacMode = 1 [(nanopb).int_size = IS_8];
+}
+
+message relativeHumidity {
+    required bool relativeHumidity = 1;
+}
+
+message accessoryState {
+    required bool accessoryState = 1;
+}
+
+message supportPackageData {
+    required string supportPackageData = 1 [(nanopb).max_size = 256];
+}
+
+message demandResponse {
+    required bool demandResponse = 1;
+}
+
+message awayMode {
+    required bool awayMode = 1;
+}
+
+message autoWake {
+    required bool autoWake = 1;
+}
+
+message localUiState {
+    required int32 localUiState = 1 [(nanopb).int_size = IS_8];
+}
+
+message dateAndTime {
+    required uint64 dateAndTime = 1;
+}
+
+message SecilMessage 
+{
+    required int32 id = 1;
+    oneof payload 
+    {
+        currentTemperature currentTemperature = 2;
+        heatingSetpoint heatingSetpoint = 3;
+        awayHeatingSetpoint awayHeatingSetpoint = 4;
+        coolingSetpoint coolingSetpoint = 5;
+        awayCoolingSetpoint awayCoolingSetpoint = 6;
+        hvacMode hvacMode = 7;
+        relativeHumidity relativeHumidity = 8;
+        accessoryState accessoryState = 9;
+        supportPackageData supportPackageData = 10;
+        demandResponse demandResponse = 11;
+        awayMode awayMode = 12;
+        autoWake autoWake = 13;
+        localUiState localUiState = 14;
+        dateAndTime dateAndTime = 15;
+    }
+}
