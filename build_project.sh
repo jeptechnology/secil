@@ -25,7 +25,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Create a tarball of the install directory
-echo "Creating tarball of the install directory..."
-tar -czf libsecil.tgz build/install
-echo "Build and tests completed successfully. Tarball created: libsecil.tgz"
+# Create a zip of the install directory
+echo "Creating zip of the install directory..."
+cd build/install
+zip -r secil_install.zip *
+if [ $? -ne 0 ]; then
+    echo "Failed to create zip of the install directory."
+    exit 1
+fi
+
