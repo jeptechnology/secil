@@ -48,7 +48,7 @@ jobs:
         fetch-depth: 0  # Fetch all history for branches and tags
         fetch-tags: true
         submodules: recursive
-        token: ${{ secrets.ACCESS_TOKEN }}
+        #token: ${{ secrets.ACCESS_TOKEN }}
 
     - name: 2) Set env IMAGE_BASE, IMAGE_LATEST and IMAGE_VERSION
       run: |
@@ -140,7 +140,7 @@ jobs:
           fetch-depth: 0  # Fetch all history for branches and tags
           fetch-tags: true
           submodules: recursive
-          token: ${{ secrets.ACCESS_TOKEN }}
+          # token: ${{ secrets.ACCESS_TOKEN }}
 
       - name: 2) Run Docker container and build project
         run: |
@@ -168,7 +168,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           # name: default title is the tag name "X.Y.Z"
-          token: ${{ secrets.ACCESS_TOKEN }}
+          # token: ${{ secrets.ACCESS_TOKEN }}
           generate_release_notes: true
           files: |
             ${{ github.workspace }}/build/install/secil_install.zip
