@@ -135,10 +135,9 @@ int main(int argc, char **argv)
     {
         attempts++;
 
-        secil_message_type_t type;
-        secil_message_payload payload;
+        secil_message message;
 
-        if (!secil_receive(&type, &payload))
+        if (!secil_receive(&message))
         {
             failures++;
             if (last_was_error)
@@ -169,7 +168,7 @@ int main(int argc, char **argv)
                 recoveries++;
                 last_was_error = false;
             }
-            log_message_received(type, &payload);
+            log_message_received(&message);
         }
     }
 

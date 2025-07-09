@@ -5,6 +5,8 @@ syntax = "proto2";
 
 import "nanopb.proto";
 
+package secil;
+
 // 1	Temperature	STM32	currentTemperature	int8	Both ESP32 and STM32 should know current temperature.
 // 2	Temperature	ESP32	heatingSetpoint	int8	When required, ESP32 shall communicate new heating setpoint to STM32.
 // 3	Temperature	ESP32	awayHeatingSetpoint	int8	When required, ESP32 shall communicate new away heating setpoint to STM32.
@@ -76,9 +78,8 @@ message dateAndTime {
     required uint64 dateAndTime = 1;
 }
 
-message SecilMessage 
+message message 
 {
-    required int32 id = 1;
     oneof payload 
     {
         currentTemperature currentTemperature = 2;

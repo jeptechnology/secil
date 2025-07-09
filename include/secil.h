@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <secil.pb.h>
 
 #if defined(__cplusplus)
 extern "C"
@@ -28,101 +29,6 @@ extern "C"
     /// @param count The number of bytes to write.
     /// @return True if we wrote count bytes successfully, false otherwise.
     typedef bool (*secil_write_fn)(void *user_data, const unsigned char *buf, size_t count);
-
-    /* Struct definitions */
-    typedef struct
-    {
-        int8_t currentTemperature;
-    } secil_currentTemperature;
-    typedef struct
-    {
-        int8_t heatingSetpoint;
-    } secil_heatingSetpoint;
-    typedef struct
-    {
-        int8_t awayHeatingSetpoint;
-    } secil_awayHeatingSetpoint;
-    typedef struct
-    {
-        int8_t coolingSetpoint;
-    } secil_coolingSetpoint;
-    typedef struct
-    {
-        int8_t awayCoolingSetpoint;
-    } secil_awayCoolingSetpoint;
-    typedef struct
-    {
-        int8_t hvacMode;
-    } secil_hvacMode;
-    typedef struct
-    {
-        bool relativeHumidity;
-    } secil_relativeHumidity;
-    typedef struct
-    {
-        bool accessoryState;
-    } secil_accessoryState;
-    typedef struct
-    {
-        char supportPackageData[256];
-    } secil_supportPackageData;
-    typedef struct
-    {
-        bool demandResponse;
-    } secil_demandResponse;
-    typedef struct
-    {
-        bool awayMode;
-    } secil_awayMode;
-    typedef struct
-    {
-        bool autoWake;
-    } secil_autoWake;
-    typedef struct
-    {
-        int8_t localUiState;
-    } secil_localUiState;
-    typedef struct
-    {
-        uint64_t dataTime; // Unix timestamp in seconds
-    } secil_dateTime;
-
-    typedef enum
-    {
-        secil_message_type_currentTemperature = 2,
-        secil_message_type_heatingSetpoint = 3,
-        secil_message_type_awayHeatingSetpoint = 4,
-        secil_message_type_coolingSetpoint = 5,
-        secil_message_type_awayCoolingSetpoint = 6,
-        secil_message_type_hvacMode = 7,
-        secil_message_type_relativeHumidity = 8,
-        secil_message_type_accessoryState = 9,
-        secil_message_type_supportPackageData = 10,
-        secil_message_type_demandResponse = 11,
-        secil_message_type_awayMode = 12,
-        secil_message_type_autoWake = 13,
-        secil_message_type_localUiState = 14,
-        secil_message_type_dateTime = 15
-    } secil_message_type_t;
-
-    /// @brief A union of all possible message types.
-    typedef union
-    {
-        secil_currentTemperature currentTemperature;
-        secil_heatingSetpoint heatingSetpoint;
-        secil_awayHeatingSetpoint awayHeatingSetpoint;
-        secil_coolingSetpoint coolingSetpoint;
-        secil_awayCoolingSetpoint awayCoolingSetpoint;
-        secil_hvacMode hvacMode;
-        secil_relativeHumidity relativeHumidity;
-        secil_accessoryState accessoryState;
-        secil_supportPackageData supportPackageData;
-        secil_demandResponse demandResponse;
-        secil_awayMode awayMode;
-        secil_autoWake autoWake;
-        secil_localUiState localUiState;
-        secil_dateTime dateTime;
-    } secil_message_payload;
 
     /// @brief The severity of a log message.
     typedef enum
@@ -155,12 +61,11 @@ extern "C"
     void secil_deinit();
 
     /// @brief The main loop of the eme_se_comms library - this function should be called repeatedly in a loop.
-    /// @param type The type of message that was received.
-    /// @param message The message that was received.
+    /// @param message A pointer to a valid instance of message that will be filled with the received message.
     /// @return True if we successfully received a message, false otherwise.
     /// @warning This function will **block** until a message is received.
     /// @note If there was a problem receiving a message, the function will attempt to log the error internally using the logger callback function.
-    bool secil_receive(secil_message_type_t *type, secil_message_payload *message);
+    bool secil_receive(secil_message *message);
 
     /// @brief Send messages to the eme_se_comms library.
     /// @param <various> parameters depending on the message type.

@@ -104,12 +104,10 @@ void my_main_processing_loop()
 {
    while (!end)
    {
-      secil_message_type_t type; // This will be written with the type of message received.
-      secil_message_payload payload; // This will be written with the payload - which is a union of well typed message data.
-                                    // NOTE: up to 256 bytes in size, keep an eye on stack usage if tight.
+      secil_message message; // This will be written with the message received
 
       // Receive the next message
-      if (secil_receive(&type, &payload))
+      if (secil_receive(&message))
       {
          // Do something with this message
       }
@@ -130,6 +128,18 @@ secil_send_currentTemperature(200);
 secil_send_heatingSetpoint(250);
 secil_send_hvacMode(1);
 ```
+
+# Adding new message types
+
+When a new message is required, we should perform all of the following steps in this checklist: 
+
+1. Add new message definition to secil.proto, e.g. `message MyNewMessage`
+1. Add `MyNewMessage` to the `oneof payload` inside `SecilMessage` using a unique new tag value, e.g. `20`
+1. Add a new function `secil_send_MyNewMessage` to `secil.h`
+1. Implement this new functionin `secil.c`
+1. Update `log_message_received()` to cope with new message type (see `/exmaple/common.c`)
+1. Update tests to check the new message (see /test/test_loopback.c`)
+
 
 # TODO
 

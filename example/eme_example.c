@@ -132,12 +132,11 @@ int main()
       {
          while (1)
          {
-            secil_message_type_t type;
-            secil_message_payload payload;
+            secil_message payload;
 
-            if (secil_receive(&type, &payload))
+            if (secil_receive(&payload))
             {
-               log_message_received(type, &payload);
+               log_message_received(&payload);
             }
             else
             {

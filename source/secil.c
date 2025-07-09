@@ -118,7 +118,7 @@ void secil_deinit()
 /// @param type The type of the message (not null).
 /// @param payload The payload of the message (not null).
 /// @return True if the main loop ran successfully, false otherwise.
-bool secil_receive(secil_message_type_t *type, secil_message_payload *payload)
+bool secil_receive(secil_message *message)
 {
     if (!secil_is_state_valid())
     {
@@ -126,9 +126,9 @@ bool secil_receive(secil_message_type_t *type, secil_message_payload *payload)
         return false;
     }
 
-    if (!type || !payload)
+    if (!message)
     {
-        secil_log(secil_LOG_ERROR, "Cannot invoke loop - Invalid arguments.");
+        secil_log(secil_LOG_ERROR, "Cannot invoke loop - message buffer is NULL.");
         return false;
     }
 
@@ -137,8 +137,7 @@ bool secil_receive(secil_message_type_t *type, secil_message_payload *payload)
     secil_skip_to_next_null(&stream);
 
     // Decode a message
-    SecilMessage message = SecilMessage_init_zero;
-    if (!pb_decode_ex(&stream, SecilMessage_fields, &message, PB_DECODE_NOINIT | PB_DECODE_DELIMITED))
+    if (!pb_decode_ex(&stream, secil_message_fields, message, PB_DECODE_NOINIT | PB_DECODE_DELIMITED))
     {
         secil_log(secil_LOG_WARNING, "Cannot decode message");
         secil_log(secil_LOG_WARNING, stream.errmsg ? stream.errmsg : "Unknown error");
@@ -146,14 +145,10 @@ bool secil_receive(secil_message_type_t *type, secil_message_payload *payload)
         return false;
     }
 
-    // Handle the message
-    *type = (secil_message_type_t)message.which_payload;
-    memcpy(payload, &message.payload, sizeof(secil_message_payload));
-
     return true;
 }
 
-static bool secil_send(const SecilMessage *message)
+static bool secil_send(const secil_message *message)
 {
     if (!secil_is_state_valid())
     {
@@ -164,117 +159,36 @@ static bool secil_send(const SecilMessage *message)
 
     // Write null terminator, followed by the message to the stream
     pb_byte_t null_byte = 0;
-    return pb_write(&stream, &null_byte, 1) && pb_encode_ex(&stream, SecilMessage_fields, message, PB_ENCODE_DELIMITED);
+    return pb_write(&stream, &null_byte, 1) && pb_encode_ex(&stream, secil_message_fields, message, PB_ENCODE_DELIMITED);
 }
 
-bool secil_send_currentTemperature(int8_t currentTemperature)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_currentTemperature_tag;
-    message.payload.currentTemperature.currentTemperature = currentTemperature;
-    return secil_send(&message);
-}
+#define SECIL_SEND(FIELD, VALUE) \
+    secil_message message = { \
+        .which_payload = secil_message_##FIELD##_tag, \
+        .payload = { .FIELD = { .FIELD = VALUE } } \
+    }; \
+    return secil_send(&message)
 
-bool secil_send_heatingSetpoint(int8_t heatingSetpoint)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_heatingSetpoint_tag;
-    message.payload.heatingSetpoint.heatingSetpoint = heatingSetpoint;
-    return secil_send(&message);
-}
+bool secil_send_currentTemperature(int8_t currentTemperature)   { SECIL_SEND(currentTemperature, currentTemperature);   }
+bool secil_send_heatingSetpoint(int8_t heatingSetpoint)         { SECIL_SEND(heatingSetpoint, heatingSetpoint);         }
+bool secil_send_awayHeatingSetpoint(int8_t awayHeatingSetpoint) { SECIL_SEND(awayHeatingSetpoint, awayHeatingSetpoint); }
+bool secil_send_coolingSetpoint(int8_t coolingSetpoint)         { SECIL_SEND(coolingSetpoint, coolingSetpoint);         }
+bool secil_send_awayCoolingSetpoint(int8_t awayCoolingSetpoint) { SECIL_SEND(awayCoolingSetpoint, awayCoolingSetpoint); }
+bool secil_send_hvacMode(int8_t hvacMode)                       { SECIL_SEND(hvacMode, hvacMode);                       }
+bool secil_send_relativeHumidity(bool relativeHumidity)         { SECIL_SEND(relativeHumidity, relativeHumidity);       }
+bool secil_send_accessoryState(bool accessoryState)             { SECIL_SEND(accessoryState, accessoryState);           }
+bool secil_send_demandResponse(bool demandResponse)             { SECIL_SEND(demandResponse, demandResponse);           }
+bool secil_send_awayMode(bool awayMode)                         { SECIL_SEND(awayMode, awayMode);                       }
+bool secil_send_autoWake(bool autoWake)                         { SECIL_SEND(autoWake, autoWake);                       }
+bool secil_send_localUiState(int8_t localUiState)               { SECIL_SEND(localUiState, localUiState);               }
+bool secil_send_dateTime(uint64_t dateTime)                     { SECIL_SEND(dateAndTime, dateTime);                    }
 
-bool secil_send_awayHeatingSetpoint(int8_t awayHeatingSetpoint)
+// NOTE: This message is different from the others, as it contains a string and cannot be directly assigned like the others.
+bool secil_send_supportPackageData(const char *supportPackageData) 
 {
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_awayHeatingSetpoint_tag;
-    message.payload.awayHeatingSetpoint.awayHeatingSetpoint = awayHeatingSetpoint;
-    return secil_send(&message);
-}
-
-bool secil_send_coolingSetpoint(int8_t coolingSetpoint)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_coolingSetpoint_tag;
-    message.payload.coolingSetpoint.coolingSetpoint = coolingSetpoint;
-    return secil_send(&message);
-}
-
-bool secil_send_awayCoolingSetpoint(int8_t awayCoolingSetpoint)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_awayCoolingSetpoint_tag;
-    message.payload.awayCoolingSetpoint.awayCoolingSetpoint = awayCoolingSetpoint;
-    return secil_send(&message);
-}
-
-bool secil_send_hvacMode(int8_t hvacMode)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_hvacMode_tag;
-    message.payload.hvacMode.hvacMode = hvacMode;
-    return secil_send(&message);
-}
-
-bool secil_send_relativeHumidity(bool relativeHumidity)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_relativeHumidity_tag;
-    message.payload.relativeHumidity.relativeHumidity = relativeHumidity;
-    return secil_send(&message);
-}
-
-bool secil_send_accessoryState(bool accessoryState)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_accessoryState_tag;
-    message.payload.accessoryState.accessoryState = accessoryState;
-    return secil_send(&message);
-}
-
-bool secil_send_supportPackageData(const char *supportPackageData)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_supportPackageData_tag;
-    strncpy(message.payload.supportPackageData.supportPackageData, supportPackageData, sizeof(message.payload.supportPackageData));
-    return secil_send(&message);
-}
-
-bool secil_send_demandResponse(bool demandResponse)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_demandResponse_tag;
-    message.payload.demandResponse.demandResponse = demandResponse;
-    return secil_send(&message);
-}
-
-bool secil_send_awayMode(bool awayMode)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_awayMode_tag;
-    message.payload.awayMode.awayMode = awayMode;
-    return secil_send(&message);
-}
-
-bool secil_send_autoWake(bool autoWake)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_autoWake_tag;
-    message.payload.autoWake.autoWake = autoWake;
-    return secil_send(&message);
-}
-
-bool secil_send_localUiState(int8_t localUiState)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_localUiState_tag;
-    message.payload.localUiState.localUiState = localUiState;
-    return secil_send(&message);
-}
-
-bool secil_send_dateTime(uint64_t dateTime)
-{
-    SecilMessage message = SecilMessage_init_zero;
-    message.which_payload = SecilMessage_dateAndTime_tag;
-    message.payload.dateAndTime.dateAndTime = dateTime;
+    secil_message message = {
+        .which_payload = secil_message_supportPackageData_tag,
+    };
+    strncpy(message.payload.supportPackageData.supportPackageData, supportPackageData, sizeof(message.payload.supportPackageData.supportPackageData) - 1);
     return secil_send(&message);
 }
