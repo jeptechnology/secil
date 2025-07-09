@@ -22,7 +22,7 @@ jobs:
     - name: Build Docker image
       uses: docker/build-push-action@v4
       with:
-        context: .
+        file: ${{ github.workspace }}/.devcontainer/Dockerfile
         push: false
         load: true
         tags: secil-builder:latest
