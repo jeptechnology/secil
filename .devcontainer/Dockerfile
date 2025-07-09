@@ -6,7 +6,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN \
    apt-get update \
    && apt-get install --yes --no-install-recommends --no-install-suggests \
-      bzip2 \
+      zip \
       cmake \
       g++ \
       git \
