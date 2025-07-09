@@ -35,7 +35,7 @@ jobs:
         echo "BUILD_SUCCESSFUL=true" >> $GITHUB_ENV
 
     - name: 4) Publish a GitHub release with changelog and binary artefacts
-      if: ${{ env.BUILD_SUCCESSFUL == 'true' }}
+      if: github.ref_type == 'tag'
       uses: softprops/action-gh-release@v2
       with:
         # name: default title is the tag name "X.Y.Z"
