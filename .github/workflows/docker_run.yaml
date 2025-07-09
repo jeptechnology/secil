@@ -1,0 +1,45 @@
+name: Secil CI Build
+
+on:
+  push:
+    branches: [ 'main', 'develop', 'release/**' ]
+    tags: [ '[0-9]+.[0-9]+.[0-9]+' ]
+  pull_request:
+    branches: [ 'main', 'develop', 'release/**' ]
+  workflow_dispatch:
+
+jobs:
+  build_and_run:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      
+    - name: Build Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: false
+        load: true
+        tags: secil-builder:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+      
+    - name: Run Docker container to build the project
+      run: |
+        docker run --rm -v ${{ github.workspace }}:/workspace secil-builder:latest bash -c "cd /workspace && make build"
+        echo "BUILD_SUCCESSFUL=true" >> $GITHUB_ENV
+
+    - name: 4) Publish a GitHub release with changelog and binary artefacts
+      if: ${{ env.BUILD_SUCCESSFUL == 'true' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        # name: default title is the tag name "X.Y.Z"
+        # token: ${{ secrets.ACCESS_TOKEN }}
+        generate_release_notes: true
+        files: |
+          ${{ github.workspace }}/build/install/secil_install.zip
