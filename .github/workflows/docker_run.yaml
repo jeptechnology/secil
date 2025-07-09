@@ -11,7 +11,12 @@ on:
 jobs:
   build_and_run:
     runs-on: ubuntu-latest
-    
+
+    # Required by Publish Test Results action
+    permissions:
+      contents: write
+      discussions: write
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
