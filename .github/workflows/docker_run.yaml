@@ -31,7 +31,7 @@ jobs:
       
     - name: Run Docker container to build the project
       run: |
-        docker run --rm -v ${{ github.workspace }}:/workspace secil-builder:latest bash -c "cd /workspace && make build"
+        docker run --rm -v ${{ github.workspace }}:/workspace secil-builder:latest bash -c "cd /workspace && ./build_project.sh"
         echo "BUILD_SUCCESSFUL=true" >> $GITHUB_ENV
 
     - name: 4) Publish a GitHub release with changelog and binary artefacts
