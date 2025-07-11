@@ -96,20 +96,20 @@ void my_main_processing_loop()
       // Read next message into our declared message
       if (secil_receive(&message))
       {
-         // Determine the message type received and 
+         // Determine the message type received and do something appropriate. 
          switch (message->which_payload)
          {
-         case secil_message_currentTemperature_tag: 
-            /* do something... */ 
+         case secil_message_currentTemperature_tag:
+            printf("Current temperature is %d\n", message->payload.currentTemperature.currentTemperature);
             break;
          case secil_message_heatingSetpoint_tag:
-            /* do something... */ 
+            printf("Heating setpoint is %d\n", message->payload.heatingSetpoint.heatingSetpoint);
             break;
          case secil_message_awayHeatingSetpoint_tag:
-            /* do something... */ 
+            printf("Away heating setpoint: %d\n", message->payload.awayHeatingSetpoint.awayHeatingSetpoint);
             break;
-
          //... Handle other message types ...
+         }
       }
       else
       {
@@ -212,6 +212,8 @@ message message
 }
 ```
 
+NOTE: Generated code will containe a new macro `secil_message_alarm_tag` and this should be used when comparing the `message->which_payload` in your processing loop when receiving messages.
+
 ### 3. Add a new sender function
 
 Add a new send function called `secil_send_alarm` to `include/secil.h`
@@ -237,6 +239,12 @@ Optionally, you could add some code using this new message to the two examples:
 
 - `/example/eme_example.c`
 - `/example/se_example.c`
+
+### 5. Share the release by tagging the repo
+
+Once this repo is tagged, there is a github action that will create a new release.
+
+Share with your colleagues, the new message
 
 ## TODO
 
