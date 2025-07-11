@@ -57,7 +57,7 @@
    // Mount USB devices
    // Mount $HOME for access to ssh keys, ssh known_hosts, and .gitconfig
    "mounts": [
-      "source=/dev/bus/usb,target=/dev/bus/usb,type=bind,consistency=cached",
+      // "source=/dev/bus/usb,target=/dev/bus/usb,type=bind,consistency=cached",
       "source=${localEnv:HOME}${localEnv:USERPROFILE},target=/.host_user_home,type=bind,consistency=cached",
       "source=/etc/ssl/certs/ca-certificates.crt,target=/usr/lib/ssl/cert.pem,type=bind,consistency=cached"
    ],
