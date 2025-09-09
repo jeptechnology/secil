@@ -308,7 +308,11 @@ bool initialise_comms_library(const char *uart_device)
     options.c_cflag &= ~CSTOPB;          // 1 stop bit
     options.c_cflag &= ~CSIZE;           // Clear data bits setting
     options.c_cflag |= CS8;              // 8 data bits
-    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // Raw input
+
+    // We also need to prevent \r being translated to \n on input
+    options.c_iflag &= ~(INLCR | ICRNL | IGNCR); // No CR to NL translation on input
+    options.c_oflag &= ~OPOST;           
+    
     tcsetattr(g_secil_context.uart_fd, TCSANOW, &options);
 
     // Initialize the secil library with our read and write functions

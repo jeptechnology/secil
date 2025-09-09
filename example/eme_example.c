@@ -9,8 +9,8 @@ int main()
    printf("This program is pretending to be the EME chip using the comms library.\n");
 
    // Initialize the communication library with pseudo UARTs
-   // if (!initialise_comms_library("/dev/ttyUSB0"))
-   if (!initialise_comms_library_with_psuedo_uarts("/tmp/ttyEME", "/tmp/ttySE"))
+   if (!initialise_comms_library("/dev/ttyUSB0"))
+   // if (!initialise_comms_library_with_psuedo_uarts("/tmp/ttyEME", "/tmp/ttySE"))
    {
       fprintf(stderr, "Failed to initialize communication library.\n");
       return 1;
