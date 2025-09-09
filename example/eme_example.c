@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h> // For sleep function
 #include "common.h"
 #include "secil.h"
 
@@ -19,11 +20,17 @@ int main()
    
    printf("Starting up as server...\n");
 
-   secil_error_t startup_result = secil_startup(secil_operating_mode_t_SERVER);
-   if (startup_result != SECIL_OK)
+   secil_error_t startup_result = SECIL_ERROR_READ_TIMEOUT;
+   
+   while (startup_result != SECIL_OK)
    {
-      fprintf(stderr, "Failed to start up as server: %s\n", secil_error_string(startup_result));
-      return 1;
+      startup_result = secil_startup(secil_operating_mode_t_SERVER);
+      if (startup_result != SECIL_OK)
+      {
+         fprintf(stderr, "Startup failed: %s\n", secil_error_string(startup_result));
+         printf("Retrying in 5 seconds...\n");
+         sleep(5);
+      }
    }
 
    launch_receive_thread();

@@ -1,5 +1,7 @@
 #include "secil.h"
 
+#include <stdarg.h>
+#include <stdio.h>
 #include <pb.h>
 #include <pb_encode.h>
 #include <pb_decode.h>
@@ -11,14 +13,15 @@
         secil_error_t err = (operation); \
         if (err != SECIL_OK) \
         { \
-            if (log) secil_log(secil_LOG_ERROR, log); \
+            if (log) secil_log(secil_LOG_DEBUG, log); \
             return err; \
         } \
     } while (0)
 
 #define HEADER_SIZE 4
 #define FOOTER_SIZE 4
-#define MAX_MESSAGE_SIZE (HEADER_SIZE + secil_message_size + FOOTER_SIZE)
+#define HEADROOM 8
+#define MAX_MESSAGE_SIZE (HEADER_SIZE + secil_message_size + FOOTER_SIZE + HEADROOM)
 
 static struct
 {
@@ -30,6 +33,7 @@ static struct
     char remote_version[32]; // Version string of the remote end
     void *user_data; // User data pointer passed to callbacks
 
+    char log_buffer[128]; // Buffer for logging messages
     uint8_t outgoingMessage[MAX_MESSAGE_SIZE]; // Buffer for encoding messages
     uint8_t incomingMessage[MAX_MESSAGE_SIZE]; // Buffer for decoding messages
 
@@ -50,11 +54,16 @@ static secil_error_t secil_io_callbacks_valid()
     return SECIL_OK;
 }
 
-static void secil_log(secil_log_severity_t severity, const char *message)
+static void secil_log(secil_log_severity_t severity, const char *format, ...)
 {
+    // Call the user-provided logger if available
     if (state.logger)
     {
-        state.logger(state.user_data, severity, message);
+        va_list args;
+        va_start(args, format);
+        vsnprintf(state.log_buffer, sizeof(state.log_buffer) - 1, format, args);
+        va_end(args);
+        state.logger(state.user_data, severity, state.log_buffer);
     }
 }
 
@@ -119,7 +128,7 @@ static pb_istream_t secil_create_istream(uint16_t msglen)
 /// @return An instance of a pb_ostream_t structure.
 static pb_ostream_t secil_create_ostream()
 {
-    return pb_ostream_from_buffer(state.outgoingMessage + 4, sizeof(state.outgoingMessage) - 4); // Leave space for header
+    return pb_ostream_from_buffer(state.outgoingMessage + 4, sizeof(state.outgoingMessage) - 8); // Leave space for header and footer
 }
 
 secil_error_t secil_init(secil_read_fn read_callback,
@@ -139,6 +148,9 @@ secil_error_t secil_init(secil_read_fn read_callback,
     state.logger = logger;
     state.user_data = user_data;
     memset(state.remote_version, 0, sizeof(state.remote_version));
+    memset(state.log_buffer, 0, sizeof(state.log_buffer));
+    memset(state.outgoingMessage, 0, sizeof(state.outgoingMessage));
+    memset(state.incomingMessage, 0, sizeof(state.incomingMessage));
     state.mode = secil_operating_mode_t_UNINITIALIZED;
 
     return secil_io_callbacks_valid();
@@ -170,8 +182,8 @@ const char *secil_error_string(secil_error_t error_code)
         return "Library not initialized";
     case SECIL_ERROR_INVALID_PARAMETER:
         return "Invalid parameter";
-    case SECIL_ERROR_READ_FAILED:
-        return "Read operation failed";
+    case SECIL_ERROR_READ_TIMEOUT:
+        return "Read operation timed out";
     case SECIL_ERROR_WRITE_FAILED:
         return "Write operation failed";
     case SECIL_ERROR_ENCODE_FAILED:
@@ -234,23 +246,26 @@ static secil_error_t secil_read_next_header()
     // First try reading the full header at once
     if (!secil_read(state.incomingMessage, 4))
     {
-        return SECIL_ERROR_READ_FAILED;
+        return SECIL_ERROR_READ_TIMEOUT;
     }
 
     while (true)
     {
         // Check for header magic bytes
-        if (state.incomingMessage[0] == 0xCA && state.incomingMessage[1] == 0xFE)
+        if (   state.incomingMessage[0] == 0xCA 
+            && state.incomingMessage[1] == 0xFE)
         {
             // Valid header found
             return SECIL_OK;
         }
 
         // Shift the buffer left by one byte and continue reading
-        memmove(state.incomingMessage, state.incomingMessage + 1, 1);
-        if (!secil_read(state.incomingMessage + 1, 1))
+        state.incomingMessage[0] = state.incomingMessage[1];
+        state.incomingMessage[1] = state.incomingMessage[2];
+        state.incomingMessage[2] = state.incomingMessage[3];
+        if (!secil_read(&state.incomingMessage[3], 1))
         {
-            return SECIL_ERROR_READ_FAILED;
+            return SECIL_ERROR_READ_TIMEOUT;
         }
     }
 }
@@ -268,7 +283,7 @@ static secil_error_t secil_receive_internal(secil_message *message)
         return SECIL_ERROR_INVALID_PARAMETER;
     }
 
-    RETURN_IF_ERROR(secil_read_next_header(), "Failed to read message header.");
+    RETURN_IF_ERROR(secil_read_next_header(), NULL);
 
     // Read message length from header
     uint16_t message_length = (uint16_t)state.incomingMessage[2] | ((uint16_t)state.incomingMessage[3] << 8);
@@ -279,16 +294,16 @@ static secil_error_t secil_receive_internal(secil_message *message)
     }
 
     // Read the message body
-    if (!secil_read(state.incomingMessage + 4, message_length + FOOTER_SIZE))
+    if (!secil_read(state.incomingMessage + HEADER_SIZE, message_length + FOOTER_SIZE))
     {
         secil_log(secil_LOG_ERROR, "Failed to read message body.");
-        return SECIL_ERROR_READ_FAILED;
+        return SECIL_ERROR_READ_TIMEOUT;
     }
     // Verify footer magic bytes
     if (state.incomingMessage[message_length + 6] != 0xFA || state.incomingMessage[message_length + 7] != 0xDE)
     {
         secil_log(secil_LOG_ERROR, "Invalid footer magic bytes.");
-        return SECIL_ERROR_READ_FAILED;
+        return SECIL_ERROR_DECODE_FAILED;
     }
 
     // Verify the CRC
@@ -296,8 +311,8 @@ static secil_error_t secil_receive_internal(secil_message *message)
     uint16_t computed_crc = crc16arc_bit(0, state.incomingMessage, message_length + 4);
     if (received_crc != computed_crc)
     {
-        secil_log(secil_LOG_ERROR, "Invalid message CRC.");
-        return SECIL_ERROR_READ_FAILED;
+        secil_log(secil_LOG_ERROR, "Invalid message CRC: expected 0x%04X, got 0x%04X", computed_crc, received_crc);
+        return SECIL_ERROR_DECODE_FAILED;
     }
 
     message->which_payload = 0;
@@ -340,6 +355,29 @@ secil_error_t secil_receive(secil_message *message)
     }
 }
 
+
+static void secil_write_header(uint16_t msglen)
+{
+    // Write the header, which is two "magic" bytes, followed by the message length as two bytes (little-endian)
+    uint8_t *header = state.outgoingMessage;
+    header[0] = 0xCA;
+    header[1] = 0xFE;
+    header[2] = (uint8_t)(msglen & 0xFF);
+    header[3] = (uint8_t)((msglen >> 8) & 0xFF);
+}
+
+static void secil_write_footer(uint16_t msglen)
+{
+    // Calculate CRC of header + message
+    uint16_t crc = crc16arc_bit(0, state.outgoingMessage, HEADER_SIZE + msglen);
+    uint8_t *footer = state.outgoingMessage + HEADER_SIZE + msglen;
+    footer[0] = (uint8_t)(crc & 0xFF);
+    footer[1] = (uint8_t)((crc >> 8) & 0xFF);
+    // Footer magic bytes (0xFADE)
+    footer[2] = 0xFA;
+    footer[3] = 0xDE;
+}
+
 /// @brief Send a secil message
 /// @param message The message to send
 /// @note The message is sent with a header consisting of two null bytes followed by the message length as two bytes (little-endian).
@@ -363,22 +401,22 @@ static secil_error_t secil_send(const secil_message *message)
         return SECIL_ERROR_ENCODE_FAILED;
     }
 
-    // Now write the header, which is two "magic" bytes, followed by the message length as two bytes (little-endian)
-    // header magic bytes (0xCAFE)
-    state.outgoingMessage[0] = 0xCA;
-    state.outgoingMessage[1] = 0xFE;
-    state.outgoingMessage[2] = (uint8_t)(stream.bytes_written & 0xFF);
-    state.outgoingMessage[3] = (uint8_t)((stream.bytes_written >> 8) & 0xFF);
+    uint16_t encoded_message_size = (uint16_t)stream.bytes_written;
 
-    // calculate CRC of header + message
-    uint16_t crc = crc16arc_bit(0, state.outgoingMessage, stream.bytes_written + HEADER_SIZE);
-    state.outgoingMessage[stream.bytes_written + 4] = (uint8_t)(crc & 0xFF);
-    state.outgoingMessage[stream.bytes_written + 5] = (uint8_t)((crc >> 8) & 0xFF);
-    // footer magic bytes (0xFADE)
-    state.outgoingMessage[stream.bytes_written + 6] = 0xFA;
-    state.outgoingMessage[stream.bytes_written + 7] = 0xDE;
+    if (encoded_message_size > secil_message_size)
+    {
+        secil_log(secil_LOG_ERROR, "Cannot send message - encoded message too large.");
+        return SECIL_ERROR_MESSAGE_TOO_LARGE;
+    }
 
-    if (!secil_write(state.outgoingMessage,  HEADER_SIZE + stream.bytes_written + FOOTER_SIZE))
+    // Write the header to the outgoing message buffer
+    secil_write_header(encoded_message_size);
+
+    // Write the footer (CRC + magic bytes) to the end of the outgoing message buffer
+    secil_write_footer(encoded_message_size);
+
+    // Finally, write the entire message (header + message + footer) to the stream
+    if (!secil_write(state.outgoingMessage,  HEADER_SIZE + encoded_message_size + FOOTER_SIZE))
     {
         secil_log(secil_LOG_ERROR, "Failed to write message.");
         return SECIL_ERROR_WRITE_FAILED;
@@ -583,8 +621,8 @@ static secil_error_t secil_startup_internal(secil_operating_mode_t mode, bool fa
     // If we are a server, we wait for the client's startup message and then respond
     // NOTE: When we are a server and we are restarting, the client will receive a startup message from us and
     //       should respond with its own startup message again. It allows for the client to detect that the server has restarted.
-    RETURN_IF_ERROR(secil_send_startup_message(mode, true), "Failed to send startup message.");
-    RETURN_IF_ERROR(secil_receive_handshake(mode), "Failed to receive server handshake response.");
+    RETURN_IF_ERROR(secil_send_startup_message(mode, true), "Failed to send handshake message to remote end.");
+    RETURN_IF_ERROR(secil_receive_handshake(mode), "Failed to receive handshake message from remote end.");
 
     if (fail_on_version_mismatch)
     {

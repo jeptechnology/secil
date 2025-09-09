@@ -14,6 +14,8 @@
 #include <termios.h>
 #include <pthread.h>
 
+// Use this to trace all UART reads and writes
+#define TRACE_UART 1
 
 static struct
 {
@@ -92,10 +94,15 @@ static void initialise_uart(const char *uart_device)
 
 static void log_fn(void *user_data, secil_log_severity_t severity, const char *message)
 {
+    #ifndef TRACE_UART
+    if (severity == secil_LOG_DEBUG)
+        return; // Ignore debug messages unless tracing is enabled
+    #endif
+
     switch (severity)
     {
     default:
-    case secil_LOG_DEBUG:   printf("[DEBUG]: "); break;
+    case secil_LOG_DEBUG:   
     case secil_LOG_INFO:    printf("[INFO ]: "); break;
     case secil_LOG_WARNING: printf("[WARN ]: "); break;
     case secil_LOG_ERROR:   printf("[ERROR]: "); break;
@@ -117,7 +124,7 @@ bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
     size_t total_bytes_read = 0;
     fd_set g_fds;
     struct timeval timeout; 
-    timeout.tv_sec = 300; // 5 minutes timeout
+    timeout.tv_sec = 5; // 5 second timeout
     timeout.tv_usec = 0;
     while (total_bytes_read < required_count)
     {
@@ -128,12 +135,10 @@ bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
         int select_result = select(g_secil_context.uart_fd + 1, &g_fds, NULL, NULL, &timeout);
         if (select_result < 0)
         {
-            perror("select failed");
             return false;
         }
         else if (select_result == 0)
         {
-            printf("Timeout waiting for data on UART\n");
             return false; // Timeout
         }
 
@@ -141,7 +146,6 @@ bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
         bytes_read = read(g_secil_context.uart_fd, buf + total_bytes_read, required_count - total_bytes_read);
         if (bytes_read < 0)
         {
-            perror("Failed to read from UART");
             sleep(1); // Wait a bit before trying again
             bytes_read = 0; // Try again
         }
@@ -153,6 +157,16 @@ bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
         fprintf(stderr, "Expected %zu bytes, but read %zu bytes\n", required_count, total_bytes_read);
         return false;
     }
+
+    #ifdef TRACE_UART
+    printf("Read %zu bytes from UART\n", total_bytes_read);
+    for (size_t i = 0; i < total_bytes_read; i++)
+    {
+        printf("%02X ", buf[i]);
+    }
+    printf("\n");
+    #endif
+
     return true; // Successfully read the required number of bytes
 }
 
@@ -164,7 +178,22 @@ static bool write_uart(void *user_data, const unsigned char *buf, size_t count)
         perror("Failed to write to UART");
         return false;
     }
-    return bytes_written == count;
+    if (bytes_written != count)
+    {
+        fprintf(stderr, "Expected to write %zu bytes, but wrote %zd bytes\n", count, bytes_written);
+        return false;
+    }
+
+    #ifdef TRACE_UART
+    printf("Wrote %zu bytes to UART\n", count);
+    for (size_t i = 0; i < count; i++)
+    {
+        printf("%02X ", buf[i]);
+    }
+    printf("\n");
+    #endif
+
+    return true;
 }
 
 /// @brief Log the message received.
@@ -321,13 +350,18 @@ static void receive_thread()
    while (1)
    {
       secil_error_t result = secil_receive(&payload);
-      if (result == SECIL_OK)
+      switch (result)
       {
-         log_message_received(&payload);
-      }
-      else
-      {
-         printf("Failed to receive message: %s\n", secil_error_string(result));
+        case SECIL_OK:
+           log_message_received(&payload);
+           break;
+        case SECIL_ERROR_READ_TIMEOUT:
+            // Timeout waiting for message - not an error, just continue waiting
+            break;
+        default:
+            // Some other error occurred
+            printf("Failed to decode message: %s\n", secil_error_string(result));
+            break;
       }
    }
 }
