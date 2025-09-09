@@ -91,6 +91,65 @@ message handshake {
     required string version = 3 [(nanopb).max_size = 32]; // version string
 }
 
+enum pairing_state_t {
+    PAIRING_IDLE = 0;
+    PAIRING_INITIATING = 1;
+    PAIRING_READY = 2;
+    PAIRING_TIMED_OUT = 3;
+    PAIRING_IN_PROGRESS = 4;
+    PAIRING_COMPLETE = 5;
+}
+
+message pairingState {
+    required pairing_state_t state = 1;
+}
+
+enum system_status_t {
+    SYSTEM_NOT_CONFIGURED = 0;
+    SYSTEM_DISCONNECTED = 1;
+    SYSTEM_CONNECTED = 2;
+    SYSTEM_ERROR = 3;
+}
+
+message wifiStatus {
+    required system_status_t state = 1;
+}
+
+message matterStatus {
+    required system_status_t state = 1;
+}
+
+enum reset_state_t {
+    FACTORY_RESET_IDLE = 0;
+    FACTORY_RESET_INITIATING = 1;
+    FACTORY_RESET_IN_PROGRESS = 2;
+}
+message factoryReset {
+    required reset_state_t state = 1;
+}
+
+enum ota_state_t {
+    OTA_IDLE = 0;
+    OTA_IN_PROGRESS = 1;
+}
+
+message otaStatus {
+    required ota_state_t state = 1;
+    required string version = 2 [(nanopb).max_size = 32]; // only valid if state == OTA_IN_PROGRESS (tells us what version we're updating to)
+    required uint32 progress = 3 [(nanopb).int_size = IS_8]; // percentage 0-100
+}
+
+enum warning_type_t {
+    WARNING_NONE   = 0;
+    WARNING_SYSTEM = 1;
+    WARNING_SAFETY = 2;
+}
+
+message warning {
+    required warning_type_t type = 1;
+    required string message = 3 [(nanopb).max_size = 256];
+}
+
 message loopbackTest {
     required string data = 1 [(nanopb).max_size = 256];
 }
@@ -114,6 +173,12 @@ message message
         autoWake autoWake                       = 13;
         localUiState localUiState               = 14;
         dateAndTime dateAndTime                 = 15;
+        pairingState pairingState               = 16;
+        wifiStatus wifiStatus                   = 17;
+        matterStatus matterStatus               = 18;
+        factoryReset factoryReset               = 19;
+        otaStatus otaStatus                     = 20;
+        warning warning                         = 21; 
         
         loopbackTest loopbackTest               = 100;
     }

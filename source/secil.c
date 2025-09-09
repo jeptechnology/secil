@@ -306,12 +306,15 @@ static secil_error_t secil_send(const secil_message *message)
     }
 }
 
-#define SECIL_SEND(FIELD, VALUE) \
+#define SECIL_SEND_MSG(MSG, FIELD, VALUE) \
     secil_message message = { \
-        .which_payload = secil_message_##FIELD##_tag, \
-        .payload = { .FIELD = { .FIELD = VALUE } } \
+        .which_payload = secil_message_##MSG##_tag, \
+        .payload = { .MSG = { .FIELD = VALUE } } \
     }; \
     return secil_send(&message)
+
+// Use this macro when the name of the message is equal to the one and only msg field it contains
+#define SECIL_SEND(FIELD, VALUE) SECIL_SEND_MSG(FIELD, FIELD, VALUE)
 
 secil_error_t secil_send_currentTemperature(int8_t currentTemperature)   { SECIL_SEND(currentTemperature, currentTemperature);   }
 secil_error_t secil_send_heatingSetpoint(int8_t heatingSetpoint)         { SECIL_SEND(heatingSetpoint, heatingSetpoint);         }
@@ -326,6 +329,50 @@ secil_error_t secil_send_awayMode(bool awayMode)                         { SECIL
 secil_error_t secil_send_autoWake(bool autoWake)                         { SECIL_SEND(autoWake, autoWake);                       }
 secil_error_t secil_send_localUiState(int8_t localUiState)               { SECIL_SEND(localUiState, localUiState);               }
 secil_error_t secil_send_dateTime(uint64_t dateTime)                     { SECIL_SEND(dateAndTime, dateTime);                    }
+secil_error_t secil_send_pairingState(secil_pairing_state_t state)       { SECIL_SEND_MSG(pairingState, state, state);           }
+secil_error_t secil_send_wifiStatus(secil_system_status_t status)        { SECIL_SEND_MSG(wifiStatus, state, status);           }
+secil_error_t secil_send_matterStatus(secil_system_status_t status)      { SECIL_SEND_MSG(matterStatus, state, status);         }
+secil_error_t secil_send_factoryReset(secil_reset_state_t state)         { SECIL_SEND_MSG(factoryReset, state, state);         }
+
+secil_error_t secil_send_otaStatus(secil_ota_state_t state, uint8_t progress, const char *version) 
+{
+    if (!version)
+    {
+        version = "";
+    }
+    if (progress > 100)
+    {
+        progress = 100;
+    }
+
+    secil_message message = {
+        .which_payload = secil_message_otaStatus_tag,
+        .payload = { .otaStatus = { 
+            .state = state,
+            .progress = progress
+        } }
+    };
+
+    strncpy(message.payload.otaStatus.version, version, sizeof(message.payload.otaStatus.version) - 1);
+
+    return secil_send(&message);
+}
+
+secil_error_t secil_send_warning(secil_warning_type_t type, const char *message) 
+{
+    if (!message)
+    {
+        secil_log(secil_LOG_ERROR, "Cannot send warning - message is NULL.");
+        return SECIL_ERROR_INVALID_PARAMETER;
+    }
+
+    secil_message msg = {
+        .which_payload = secil_message_warning_tag,
+        .payload = { .warning = { .type = type } }
+    };
+    strncpy(msg.payload.warning.message, message, sizeof(msg.payload.warning.message) - 1);
+    return secil_send(&msg);
+}
 
 // NOTE: This message is different from the others, as it contains a string and cannot be directly assigned like the others.
 secil_error_t secil_send_supportPackageData(const char *supportPackageData) 

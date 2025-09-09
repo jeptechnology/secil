@@ -145,6 +145,13 @@ extern "C"
     secil_error_t secil_send_autoWake(bool autoWake);
     secil_error_t secil_send_localUiState(int8_t localUiState);
     secil_error_t secil_send_dateTime(uint64_t dataTime);
+    secil_error_t secil_send_pairingState(secil_pairing_state_t state);
+    secil_error_t secil_send_wifiStatus(secil_system_status_t status);
+    secil_error_t secil_send_matterStatus(secil_system_status_t status);
+    secil_error_t secil_send_factoryReset(secil_reset_state_t state);
+    secil_error_t secil_send_otaStatus(secil_ota_state_t state, uint8_t progress, const char *version);
+    secil_error_t secil_send_warning(secil_warning_type_t type, const char *message);
+
 
 #if defined(__cplusplus)
 }
