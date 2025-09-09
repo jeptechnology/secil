@@ -94,7 +94,8 @@ void my_main_processing_loop()
       secil_message message; 
 
       // Read next message into our declared message
-      if (secil_receive(&message))
+      secil_error_t result = secil_receive(&message);
+      if (result == SECIL_OK)
       {
          // Determine the message type received and do something appropriate. 
          switch (message->which_payload)

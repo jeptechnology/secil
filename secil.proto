@@ -78,10 +78,16 @@ message dateAndTime {
     required uint64 dateAndTime = 1;
 }
 
+enum operating_mode_t {
+    UNINITIALIZED = 0;
+    CLIENT = 1;
+    SERVER = 2;
+}
+
 // Sent by both client and server on startup
-message startup {
-    required bool client = 1; // true if sent by client, false if sent by server
-    required bool server = 2; // true if sent by server, false if sent by client
+message handshake {
+    required operating_mode_t mode = 1; // operating mode of the sender: client or server
+    required bool needs_ack = 2; // true if this is the first handshake message and an ack is expected
     required string version = 3 [(nanopb).max_size = 32]; // version string
 }
 
@@ -93,7 +99,7 @@ message message
 {
     oneof payload 
     {
-        startup startup                         = 1;
+        handshake handshake                     = 1;
         currentTemperature currentTemperature   = 2;
         heatingSetpoint heatingSetpoint         = 3;
         awayHeatingSetpoint awayHeatingSetpoint = 4;

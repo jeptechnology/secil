@@ -8,5 +8,6 @@ extern bool initialise_comms_library_with_psuedo_uarts(const char *uart_local, c
 extern bool initialise_comms_library(const char *uart_device);
 extern void log_message_received(secil_message* payload);
 extern void test_uart_loopback();
+extern void launch_receive_thread();
 
 #endif // COMMON_H

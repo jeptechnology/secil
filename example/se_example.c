@@ -18,17 +18,16 @@ int main()
    printf("SE Comms Library initialized successfully.\n");
 
    printf("Starting up as client...\n");
-   char server_version[32];
-   memset(server_version, 0, sizeof(server_version));
+
    // Start up as client
-   secil_error_t startup_result = secil_startup_as_client("SE_Example_v1.0", server_version, sizeof(server_version));
+   secil_error_t startup_result = secil_startup(secil_operating_mode_t_CLIENT);
    if (startup_result != SECIL_OK)
    {
        fprintf(stderr, "Failed to start up as client: %s\n", secil_error_string(startup_result));
        return 1;
    }
 
-   printf("Started up as client successfully. Talking to server version: %s\n", server_version);
+   launch_receive_thread();
 
    int option;
    
@@ -38,10 +37,9 @@ int main()
       printf(" 1. Send Accessory State\n");
       printf(" 2. Send Auto Wake\n");
       printf(" 3. Send Away Mode\n");
-      printf(" 4. Receive Messages\n");
-      printf(" 5. UART loopback test\n");
-      printf(" 6. Exit\n");
-      printf("Please select an option (1-6):\n");
+      printf(" 4. UART loopback test\n");
+      printf(" 5. Exit\n");
+      printf("Please select an option (1-5):\n");
 
       scanf("%d", &option);
       switch (option)
@@ -74,27 +72,16 @@ int main()
             }
             break;
          case 4:
-           while(1) 
-           {
-               secil_message payload;
-
-               if (secil_receive(&payload))
-               {
-                  log_message_received(&payload);
-               }
-            }
-            break;
-         case 5:
             test_uart_loopback();
             break;
-         case 6:
+         case 5:
             printf("Exiting...\n");
             break;
          default:
             printf("Invalid option. Please try again.\n");
       }
    }
-   while(option != 6);
+   while(option != 5);
 
    // Deinitialize the library
    secil_deinit();

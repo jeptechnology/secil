@@ -21,6 +21,11 @@ static void log_fn(void *user_data, secil_log_severity_t severity, const char *m
     printf("%s\n", message);
 }
 
+static void on_connect_fn(void *user_data, secil_operating_mode_t mode, const char *remote_version)
+{
+    printf("Connected to remote version: %s, as %s\n", remote_version, mode == secil_operating_mode_t_CLIENT ? "client" : "server");
+}
+
 /// @brief This is the user defined callback function to read data from the stream.
 /// @param user_data - The user data, which is a pointer to the memory buffer.
 /// @param buf - The buffer to read the data into.
@@ -91,6 +96,7 @@ int main(int argc, char **argv)
     secil_init(
         read_fn,
         write_fn,
+        on_connect_fn,
         log_fn,
         &memory_buffer); // Pass the memory buffer as the user data
 
@@ -137,7 +143,8 @@ int main(int argc, char **argv)
 
         secil_message message;
 
-        if (!secil_receive(&message))
+        secil_error_t result = secil_receive(&message);
+        if (result != SECIL_OK)
         {
             failures++;
             if (last_was_error)

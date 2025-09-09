@@ -1,42 +1,7 @@
 #include <stdio.h>
-#include <pthread.h>
 #include "common.h"
 #include "secil.h"
 
-
-void receive_thread()
-{
-   while (1)
-   {
-      secil_message payload;
-
-      if (secil_receive(&payload))
-      {
-         log_message_received(&payload);
-      }
-      else
-      {
-         printf("Failed to receive message.\n");
-         break;
-      }
-   }
-}
-
-void launch_receive_thread()
-{
-   printf("Launching receive thread...\n");
-
-   pthread_t thread_id;
-   if (pthread_create(&thread_id, NULL, (void*(*)(void*))receive_thread, NULL) != 0)
-   {
-      perror("Failed to create receive thread");
-   }
-   else
-   {
-      pthread_detach(thread_id); // Detach the thread to allow it to run independently
-      printf("Receive thread launched successfully.\n");
-   }
-}  
 
 int main()
 {
@@ -53,17 +18,13 @@ int main()
    printf("SE Comms Library initialized successfully.\n");
    
    printf("Starting up as server...\n");
-   char client_version[32];
-   memset(client_version, 0, sizeof(client_version));
-   // Start up as server
-   secil_error_t startup_result = secil_startup_as_server("EME_Example_v1.0", client_version, sizeof(client_version));
+
+   secil_error_t startup_result = secil_startup(secil_operating_mode_t_SERVER);
    if (startup_result != SECIL_OK)
    {
       fprintf(stderr, "Failed to start up as server: %s\n", secil_error_string(startup_result));
       return 1;
    }
-
-   printf("Started up as server successfully. Client version: %s\n", client_version);
 
    launch_receive_thread();
 
@@ -92,10 +53,9 @@ int main()
       printf(" 7. Send Relative Humidity\n");
       printf(" 8. Send Accessory State\n");
       printf(" 9. Send Support Package Data\n");
-      printf(" 10. Receive Messages\n");
-      printf(" 11. Loopback Test\n");
-      printf(" 12. Exit\n");
-      printf("Please select an option (1-12):\n");
+      printf(" 10. Loopback Test\n");
+      printf(" 11. Exit\n");
+      printf("Please select an option (1-11):\n");
       scanf("%d", &option); // Note the space before %c to consume any newline character
 
       switch (option)
@@ -182,31 +142,13 @@ int main()
          break;
       }
       case 10:
-      {
-         while (1)
-         {
-            secil_message payload;
-
-            if (secil_receive(&payload))
-            {
-               log_message_received(&payload);
-            }
-            // else
-            // {
-            //    printf("Failed to receive message.\n");
-            //    break;
-            // }
-         }
-         break;
-      }
-      case 11:
          test_uart_loopback();
          break;
-      case 12:
+      case 11:
          printf("Exiting...\n");
          break;
       }
-   } while (option != 12);
+   } while (option != 11);
 
    // Deinitialize the library
    secil_deinit();

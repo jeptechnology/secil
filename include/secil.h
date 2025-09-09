@@ -10,6 +10,8 @@
 #include <stdbool.h>
 #include <secil.pb.h>
 
+#define SECIL_VERSION "0.1.0"
+
 #if defined(__cplusplus)
 extern "C"
 {
@@ -41,38 +43,49 @@ extern "C"
 
     typedef enum{
         SECIL_OK = 0,
-        SECIL_ERROR_INIT_FAILED,
-        SECIL_ERROR_ALREADY_INITIALIZED,
-        SECIL_ERROR_NOT_INITIALIZED,
-        SECIL_ERROR_INVALID_PARAMETER,
-        SECIL_ERROR_READ_FAILED,
-        SECIL_ERROR_WRITE_FAILED,
-        SECIL_ERROR_ENCODE_FAILED,
-        SECIL_ERROR_DECODE_FAILED,
-        SECIL_ERROR_MESSAGE_TOO_LARGE,
-        SECIL_ERROR_UNKNOWN_MESSAGE_TYPE,
-        SECIL_ERROR_SEND_FAILED,
-        SECIL_ERROR_RECEIVE_FAILED,
-        SECIL_ERROR_STARTUP_FAILED,
-        SECIL_ERROR_VERSION_MISMATCH
+        SECIL_ERROR_INIT_FAILED = 1,
+        SECIL_ERROR_INVALID_STATE = 2,
+        SECIL_ERROR_ALREADY_INITIALIZED = 3,
+        SECIL_ERROR_NOT_INITIALIZED = 4,
+        SECIL_ERROR_INVALID_PARAMETER = 5,
+        SECIL_ERROR_READ_FAILED = 6,
+        SECIL_ERROR_WRITE_FAILED = 7,
+        SECIL_ERROR_ENCODE_FAILED = 8,
+        SECIL_ERROR_DECODE_FAILED = 9,
+        SECIL_ERROR_MESSAGE_TOO_LARGE = 10,
+        SECIL_ERROR_UNKNOWN_MESSAGE_TYPE = 11,
+        SECIL_ERROR_SEND_FAILED = 12,
+        SECIL_ERROR_RECEIVE_FAILED = 13,
+        SECIL_ERROR_STARTUP_FAILED = 14,
+        SECIL_ERROR_VERSION_MISMATCH = 15
 
     } secil_error_t;
 
+    
     /// @brief A callback function that is called when a log message is received.
     /// @param user_data The user data.
     /// @param message The log message.
     typedef void (*secil_log_fn)(void *user_data, secil_log_severity_t severity, const char *message);
 
+    /// @brief A callback function that is called when a connection is established with the remote end.
+    /// @param user_data The user data.
+    /// @param remote_mode The operating mode of remote end (client or server).
+    /// @param remote_version The version string of the remote end's secil library.
+    typedef void (*secil_on_connect_fn)(void *user_data, secil_operating_mode_t remote_mode, const char *remote_version);
+
     /// @brief Initializes the eme_se_comms library.
     /// @param read_callback The read callback function (required).
     /// @param write_callback The write callback function (required).
-    /// @param on_message The on message callback function (required).
+    /// @param on_connect The on connect callback function - this is called every time a connection is established with the remote end (optional - can be null).
+    ///                   NOTE: This function will also be called each time the remote end restarts and sends a handshake message.
+    ///                   Your application may wish to use this to reset its own state or ask for a re-send of any data controlled by the remote end.
     /// @param logger The logger callback function (optional - can be null).
     /// @param user_data Pointer to any user-defined data (optional - can be null).
     /// @return SECIL_OK if the library was initialized successfully, otherwise an error code.
     /// @note This function must be called before any other functions in the library.
     secil_error_t secil_init(secil_read_fn read_callback,
                              secil_write_fn write_callback,
+                             secil_on_connect_fn on_connect,
                              secil_log_fn logger,
                              void *user_data);
 
@@ -91,18 +104,22 @@ extern "C"
     secil_error_t secil_loopback_test(const char *test_data);
 
     /// @brief Start up the SECIL library as either a client or server.
-    /// @param myversion The version string of this side (max 31 characters + null terminator).
-    /// @param serverversion A buffer to receive the version string of the other side (max 31 characters + null terminator).
-    /// @param serverversion_size The size of the serverversion buffer.
+    /// @param mode The mode to start up in (client or server).
     /// @return SECIL_OK if the startup was successful, otherwise an error code.
-    secil_error_t secil_startup_as_client(const char *myversion, char *serverversion, size_t serverversion_size);
+    /// @note This function must be called after secil_init() and before any other functions in the library.
+    /// @note After calling this function, the library will be in either client or server mode.
+    /// @note The version strings exchanged during startup must match between client and server - if they don't match, SECIL_ERROR_VERSION_MISMATCH will be returned.
+    secil_error_t secil_startup(secil_operating_mode_t mode);
 
-    /// @brief Start up the SECIL library as either a client or server.
-    /// @param myversion The version string of this side (max 31 characters + null terminator).
-    /// @param clientversion A buffer to receive the version string of the other side (max 31 characters + null terminator).
-    /// @param clientversion_size The size of the clientversion buffer.
-    /// @return SECIL_OK if the startup was successful, otherwise an error code.
-    secil_error_t secil_startup_as_server(const char *myversion, char *clientversion, size_t clientversion_size);
+    /// @brief Start up the SECIL library as either a client or server, ignoring version mismatches.
+    /// @see secil_startup()
+    secil_error_t secil_startup_ignore_mismatch(secil_operating_mode_t mode);
+
+    /// @brief Get the version string of the remote end (the other MCU).
+    /// @param version A buffer to receive the version string.
+    /// @param version_size The size of the version buffer (should be at least 32 bytes).
+    /// @return SECIL_OK if the version was retrieved successfully, otherwise an error code. 
+    secil_error_t secil_get_remote_version(char *version, size_t version_size);
 
     /// @brief The main loop of the eme_se_comms library - this function should be called repeatedly in a loop.
     /// @param message A pointer to a valid instance of message that will be filled with the received message.

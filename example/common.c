@@ -12,6 +12,8 @@
 #include <string.h>
 #include <errno.h>
 #include <termios.h>
+#include <pthread.h>
+
 
 static struct
 {
@@ -100,6 +102,11 @@ static void log_fn(void *user_data, secil_log_severity_t severity, const char *m
     }
     printf("%s\n", message);
     fflush(stdout);
+}
+
+static void on_connect_fn(void *user_data, secil_operating_mode_t mode, const char *remote_version)
+{
+    printf("Connected to remote %s on version %s\n", mode == secil_operating_mode_t_CLIENT ? "client" : "server", remote_version);
 }
 
 bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
@@ -232,11 +239,9 @@ bool initialise_comms_library_with_psuedo_uarts(const char *uart_local, const ch
     initialise_uart(uart_local);
 
     // Initialize the secil library with our read and write functions
-    if (!secil_init(
-            read_uart,
-            write_uart,
-            log_fn,
-            NULL))
+    secil_error_t result = secil_init(read_uart, write_uart, on_connect_fn, log_fn, NULL);
+
+    if (result != SECIL_OK)
     {
         perror("Failed to initialize secil library");
         return false;
@@ -277,13 +282,10 @@ bool initialise_comms_library(const char *uart_device)
     tcsetattr(g_secil_context.uart_fd, TCSANOW, &options);
 
     // Initialize the secil library with our read and write functions
-    if (!secil_init(
-            read_uart,
-            write_uart,
-            log_fn,
-            NULL))
+    secil_error_t initResult = secil_init(read_uart, write_uart, on_connect_fn, log_fn, NULL);
+    if (initResult != SECIL_OK)
     {
-        perror("Failed to initialize secil library");
+        printf("Failed to initialize secil library: %s\n", secil_error_string(initResult));
         return false;
     }
 
@@ -297,19 +299,7 @@ void test_uart_loopback()
     printf("Loopback test - Start typing characters to read from the UART. Automatically stops once we receive a newline.\n");
 
     // read into buffer until newline or buffer full
-    size_t index = 0;
-    char c = 0;
-    while (c != '\n' && index < sizeof(buffer) - 1)
-    {
-        if (getchar() == EOF)
-        {
-            printf("Error reading from stdin\n");
-            return;
-        }
-        c = getchar();
-        buffer[index++] = c;
-    }
-    buffer[index] = '\0';    
+    scanf(" %[^\n]", buffer); // Read string with spaces
 
     // Now do the loopback test
     secil_error_t result = secil_loopback_test(buffer);
@@ -319,6 +309,40 @@ void test_uart_loopback()
     }
     else
     {
-        printf("Loopback test failed with error code: %d\n", result);
+        printf("Loopback test failed with error code: %s\n", secil_error_string(result));
     }
 }
+
+static void receive_thread()
+{
+   secil_message payload;
+
+   while (1)
+   {
+      secil_error_t result = secil_receive(&payload);
+      if (result == SECIL_OK)
+      {
+         log_message_received(&payload);
+      }
+      else
+      {
+         printf("Failed to receive message: %s\n", secil_error_string(result));
+      }
+   }
+}
+
+void launch_receive_thread()
+{
+   printf("Launching receive thread...\n");
+
+   pthread_t thread_id;
+   if (pthread_create(&thread_id, NULL, (void*(*)(void*))receive_thread, NULL) != 0)
+   {
+      perror("Failed to create receive thread");
+   }
+   else
+   {
+      pthread_detach(thread_id); // Detach the thread to allow it to run independently
+      printf("Receive thread launched successfully.\n");
+   }
+}  
