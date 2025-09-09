@@ -16,6 +16,8 @@ RUN \
       make \
       ninja-build \
       nanopb \
+      socat \
+      picocom \
    && apt-get clean --quiet=2 \
    && apt-get autoremove --quiet=2 \
    && locale-gen en_US en_US.UTF-8 \

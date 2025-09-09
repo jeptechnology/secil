@@ -244,7 +244,7 @@ Optionally, you could add some code using this new message to the two examples:
 
 Once this repo is tagged, there is a github action that will create a new release.
 
-Share with your colleagues, the new message
+The link to this can then be shared with colleagues.
 
 ## TODO
 

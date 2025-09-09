@@ -10,7 +10,8 @@
 #include <sys/wait.h>
 #include <sys/select.h>
 #include <string.h>
-#include <errno.h>  
+#include <errno.h>
+#include <termios.h>
 
 static struct
 {
@@ -97,10 +98,11 @@ static void log_fn(void *user_data, secil_log_severity_t severity, const char *m
     case secil_LOG_WARNING: printf("[WARN ]: "); break;
     case secil_LOG_ERROR:   printf("[ERROR]: "); break;
     }
-    printf("%s", message);
+    printf("%s\n", message);
+    fflush(stdout);
 }
 
-static bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
+bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
 {
     // keep reading from global uart until we have the required number of bytes
     // NOTE: The uart is non-blocking, so we need to wait for data to be available with the select() function.
@@ -108,7 +110,7 @@ static bool read_uart(void *user_data, unsigned char *buf, size_t required_count
     size_t total_bytes_read = 0;
     fd_set g_fds;
     struct timeval timeout; 
-    timeout.tv_sec = 120; // 2 minutes timeout
+    timeout.tv_sec = 300; // 5 minutes timeout
     timeout.tv_usec = 0;
     while (total_bytes_read < required_count)
     {
@@ -218,9 +220,9 @@ void log_message_received(secil_message *message)
     }
 }
 
-bool initialise_comms_library(const char *uart_local, const char *uart_remote)
+bool initialise_comms_library_with_psuedo_uarts(const char *uart_local, const char *uart_remote)
 {
-    // Create pseudo UARTs using socat
+    // If we are given two UARTs, create pseudo UARTs using socat
     if (!create_psuedo_uarts_via_socat(uart_local, uart_remote))
     {
         return false;
@@ -241,4 +243,82 @@ bool initialise_comms_library(const char *uart_local, const char *uart_remote)
     }
 
     return true;
+}
+
+bool initialise_comms_library(const char *uart_device)
+{
+    // Initialize a connection to the local UART
+    initialise_uart(uart_device);
+
+    // Ensure we set the UART to blocking mode, 115200 baud, 8 data bits, no parity, 1 stop bit
+    int result = fcntl(g_secil_context.uart_fd, F_SETFL, 0);
+    if (result == -1)
+    {
+        perror("Failed to set UART to blocking mode");
+        return false;
+    }
+
+    struct termios options;
+    result = tcgetattr(g_secil_context.uart_fd, &options);
+    if (result == -1)
+    {
+        perror("Failed to get UART attributes");
+        return false;
+    }
+
+    cfsetispeed(&options, B115200);
+    cfsetospeed(&options, B115200);
+    options.c_cflag |= (CLOCAL | CREAD); // Enable receiver, ignore modem control lines
+    options.c_cflag &= ~PARENB;          // No parity
+    options.c_cflag &= ~CSTOPB;          // 1 stop bit
+    options.c_cflag &= ~CSIZE;           // Clear data bits setting
+    options.c_cflag |= CS8;              // 8 data bits
+    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // Raw input
+    tcsetattr(g_secil_context.uart_fd, TCSANOW, &options);
+
+    // Initialize the secil library with our read and write functions
+    if (!secil_init(
+            read_uart,
+            write_uart,
+            log_fn,
+            NULL))
+    {
+        perror("Failed to initialize secil library");
+        return false;
+    }
+
+    return true;
+}
+
+void test_uart_loopback()
+{
+    // Just read some chars from the UART until we get a newline
+    char buffer[256];
+    printf("Loopback test - Start typing characters to read from the UART. Automatically stops once we receive a newline.\n");
+
+    // read into buffer until newline or buffer full
+    size_t index = 0;
+    char c = 0;
+    while (c != '\n' && index < sizeof(buffer) - 1)
+    {
+        if (getchar() == EOF)
+        {
+            printf("Error reading from stdin\n");
+            return;
+        }
+        c = getchar();
+        buffer[index++] = c;
+    }
+    buffer[index] = '\0';    
+
+    // Now do the loopback test
+    secil_error_t result = secil_loopback_test(buffer);
+    if (result == SECIL_OK)
+    {
+        printf("Loopback test successful. Sent and received: %s\n", buffer);
+    }
+    else
+    {
+        printf("Loopback test failed with error code: %d\n", result);
+    }
 }
