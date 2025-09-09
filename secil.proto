@@ -7,20 +7,20 @@ import "nanopb.proto";
 
 package secil;
 
-// 1	Temperature	STM32	currentTemperature	int8	Both ESP32 and STM32 should know current temperature.
-// 2	Temperature	ESP32	heatingSetpoint	int8	When required, ESP32 shall communicate new heating setpoint to STM32.
-// 3	Temperature	ESP32	awayHeatingSetpoint	int8	When required, ESP32 shall communicate new away heating setpoint to STM32.
-// 4	Temperature	ESP32	coolingSetpoint	int8	When required, ESP32 shall communicate new cooling setpoint to STM32.
-// 5	Temperature	ESP32	awayCoolingSetpoint	int8	When required, ESP32 shall communicate new away cooling setpoint to STM32.
-// 6	HVAC	ESP32	hvacMode	enum	In order to have proper HVAC mode icon displayed on local UI and external interfaces, ESP32 and STM32 should exchange proper HVAC values. For Fan icon - it will be shown only if Fan mode is on, while Heat/Cool mode will not have the fan icon shown.
-// 7	HVAC	STM32	relativeHumidity	bool	Report on external interfaces the Current Relative Humidity.
-// 8	HVAC	STM32	accessoryState	bool	Report on external interfaces the Accessory state (Humidifier or Dehumidifier) state (On, Off).
-// 9	Feature	STM32	supportPackageData	string	STM32 to send it's part of data to ESP32 for support package, so ESP32 can send the whole package back to us for inspection.
-// 10	Feature	ESP32	demandResponse	bool	Demand Response shall be shown on both local UI and external interfaces.
-// 11	Feature	ESP32	awayMode	bool	In order to achieve proper mSMT behavior, the mSMT needs to know when the Away Mode is engaged.
-// 12	Feature	ESP32	autoWake	bool	In order to achieve proper mSMT behavior, the mSMT needs to know when the Away Wake is engaged.
-// 13	Device	ESP32	localUiState	enum	Refer to the machine state diagram to cover all values for enum.
-// 14	Device	STM32	dateAndTime u64 number of seconds since epoch
+// 2	Temperature	STM32	currentTemperature	int8	Both ESP32 and STM32 should know current temperature.
+// 3	Temperature	ESP32	heatingSetpoint	int8	When required, ESP32 shall communicate new heating setpoint to STM32.
+// 4	Temperature	ESP32	awayHeatingSetpoint	int8	When required, ESP32 shall communicate new away heating setpoint to STM32.
+// 5	Temperature	ESP32	coolingSetpoint	int8	When required, ESP32 shall communicate new cooling setpoint to STM32.
+// 6	Temperature	ESP32	awayCoolingSetpoint	int8	When required, ESP32 shall communicate new away cooling setpoint to STM32.
+// 7	HVAC	ESP32	hvacMode	enum	In order to have proper HVAC mode icon displayed on local UI and external interfaces, ESP32 and STM32 should exchange proper HVAC values. For Fan icon - it will be shown only if Fan mode is on, while Heat/Cool mode will not have the fan icon shown.
+// 8	HVAC	STM32	relativeHumidity	bool	Report on external interfaces the Current Relative Humidity.
+// 9	HVAC	STM32	accessoryState	bool	Report on external interfaces the Accessory state (Humidifier or Dehumidifier) state (On, Off).
+// 10	Feature	STM32	supportPackageData	string	STM32 to send it's part of data to ESP32 for support package, so ESP32 can send the whole package back to us for inspection.
+// 11	Feature	ESP32	demandResponse	bool	Demand Response shall be shown on both local UI and external interfaces.
+// 12	Feature	ESP32	awayMode	bool	In order to achieve proper mSMT behavior, the mSMT needs to know when the Away Mode is engaged.
+// 13	Feature	ESP32	autoWake	bool	In order to achieve proper mSMT behavior, the mSMT needs to know when the Away Wake is engaged.
+// 14	Device	ESP32	localUiState	enum	Refer to the machine state diagram to cover all values for enum.
+// 15	Device	STM32	dateAndTime u64 number of seconds since epoch
 
 message currentTemperature {
     required int32 currentTemperature = 1 [(nanopb).int_size = IS_8];
@@ -78,23 +78,108 @@ message dateAndTime {
     required uint64 dateAndTime = 1;
 }
 
+enum operating_mode_t {
+    UNINITIALIZED = 0;
+    CLIENT = 1;
+    SERVER = 2;
+}
+
+// Sent by both client and server on startup
+message handshake {
+    required operating_mode_t mode = 1; // operating mode of the sender: client or server
+    required bool needs_ack = 2; // true if this is the first handshake message and an ack is expected
+    required string version = 3 [(nanopb).max_size = 32]; // version string
+}
+
+enum pairing_state_t {
+    PAIRING_IDLE = 0;
+    PAIRING_INITIATING = 1;
+    PAIRING_READY = 2;
+    PAIRING_TIMED_OUT = 3;
+    PAIRING_IN_PROGRESS = 4;
+    PAIRING_COMPLETE = 5;
+}
+
+message pairingState {
+    required pairing_state_t state = 1;
+}
+
+enum system_status_t {
+    SYSTEM_NOT_CONFIGURED = 0;
+    SYSTEM_DISCONNECTED = 1;
+    SYSTEM_CONNECTED = 2;
+    SYSTEM_ERROR = 3;
+}
+
+message wifiStatus {
+    required system_status_t state = 1;
+}
+
+message matterStatus {
+    required system_status_t state = 1;
+}
+
+enum reset_state_t {
+    FACTORY_RESET_IDLE = 0;
+    FACTORY_RESET_INITIATING = 1;
+    FACTORY_RESET_IN_PROGRESS = 2;
+}
+message factoryReset {
+    required reset_state_t state = 1;
+}
+
+enum ota_state_t {
+    OTA_IDLE = 0;
+    OTA_IN_PROGRESS = 1;
+}
+
+message otaStatus {
+    required ota_state_t state = 1;
+    required string version = 2 [(nanopb).max_size = 32]; // only valid if state == OTA_IN_PROGRESS (tells us what version we're updating to)
+    required uint32 progress = 3 [(nanopb).int_size = IS_8]; // percentage 0-100
+}
+
+enum warning_type_t {
+    WARNING_NONE   = 0;
+    WARNING_SYSTEM = 1;
+    WARNING_SAFETY = 2;
+}
+
+message warning {
+    required warning_type_t type = 1;
+    required string message = 3 [(nanopb).max_size = 256];
+}
+
+message loopbackTest {
+    required string data = 1 [(nanopb).max_size = 256];
+}
+
 message message 
 {
     oneof payload 
     {
-        currentTemperature currentTemperature = 2;
-        heatingSetpoint heatingSetpoint = 3;
+        handshake handshake                     = 1;
+        currentTemperature currentTemperature   = 2;
+        heatingSetpoint heatingSetpoint         = 3;
         awayHeatingSetpoint awayHeatingSetpoint = 4;
-        coolingSetpoint coolingSetpoint = 5;
+        coolingSetpoint coolingSetpoint         = 5;
         awayCoolingSetpoint awayCoolingSetpoint = 6;
-        hvacMode hvacMode = 7;
-        relativeHumidity relativeHumidity = 8;
-        accessoryState accessoryState = 9;
-        supportPackageData supportPackageData = 10;
-        demandResponse demandResponse = 11;
-        awayMode awayMode = 12;
-        autoWake autoWake = 13;
-        localUiState localUiState = 14;
-        dateAndTime dateAndTime = 15;
+        hvacMode hvacMode                       = 7;
+        relativeHumidity relativeHumidity       = 8;
+        accessoryState accessoryState           = 9;
+        supportPackageData supportPackageData   = 10;
+        demandResponse demandResponse           = 11;
+        awayMode awayMode                       = 12;
+        autoWake autoWake                       = 13;
+        localUiState localUiState               = 14;
+        dateAndTime dateAndTime                 = 15;
+        pairingState pairingState               = 16;
+        wifiStatus wifiStatus                   = 17;
+        matterStatus matterStatus               = 18;
+        factoryReset factoryReset               = 19;
+        otaStatus otaStatus                     = 20;
+        warning warning                         = 21; 
+        
+        loopbackTest loopbackTest               = 100;
     }
 }

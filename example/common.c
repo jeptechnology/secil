@@ -10,7 +10,12 @@
 #include <sys/wait.h>
 #include <sys/select.h>
 #include <string.h>
-#include <errno.h>  
+#include <errno.h>
+#include <termios.h>
+#include <pthread.h>
+
+// Use this to trace all UART reads and writes
+#define TRACE_UART 1
 
 static struct
 {
@@ -89,18 +94,29 @@ static void initialise_uart(const char *uart_device)
 
 static void log_fn(void *user_data, secil_log_severity_t severity, const char *message)
 {
+    #ifndef TRACE_UART
+    if (severity == secil_LOG_DEBUG)
+        return; // Ignore debug messages unless tracing is enabled
+    #endif
+
     switch (severity)
     {
     default:
-    case secil_LOG_DEBUG:   printf("[DEBUG]: "); break;
+    case secil_LOG_DEBUG:   
     case secil_LOG_INFO:    printf("[INFO ]: "); break;
     case secil_LOG_WARNING: printf("[WARN ]: "); break;
     case secil_LOG_ERROR:   printf("[ERROR]: "); break;
     }
-    printf("%s", message);
+    printf("%s\n", message);
+    fflush(stdout);
 }
 
-static bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
+static void on_connect_fn(void *user_data, secil_operating_mode_t mode, const char *remote_version)
+{
+    printf("Connected to remote %s on version %s\n", mode == secil_operating_mode_t_CLIENT ? "client" : "server", remote_version);
+}
+
+bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
 {
     // keep reading from global uart until we have the required number of bytes
     // NOTE: The uart is non-blocking, so we need to wait for data to be available with the select() function.
@@ -108,7 +124,7 @@ static bool read_uart(void *user_data, unsigned char *buf, size_t required_count
     size_t total_bytes_read = 0;
     fd_set g_fds;
     struct timeval timeout; 
-    timeout.tv_sec = 120; // 2 minutes timeout
+    timeout.tv_sec = 5; // 5 second timeout
     timeout.tv_usec = 0;
     while (total_bytes_read < required_count)
     {
@@ -119,12 +135,10 @@ static bool read_uart(void *user_data, unsigned char *buf, size_t required_count
         int select_result = select(g_secil_context.uart_fd + 1, &g_fds, NULL, NULL, &timeout);
         if (select_result < 0)
         {
-            perror("select failed");
             return false;
         }
         else if (select_result == 0)
         {
-            printf("Timeout waiting for data on UART\n");
             return false; // Timeout
         }
 
@@ -132,8 +146,8 @@ static bool read_uart(void *user_data, unsigned char *buf, size_t required_count
         bytes_read = read(g_secil_context.uart_fd, buf + total_bytes_read, required_count - total_bytes_read);
         if (bytes_read < 0)
         {
-            perror("Failed to read from UART");
-            return false;
+            sleep(1); // Wait a bit before trying again
+            bytes_read = 0; // Try again
         }
         
         total_bytes_read += bytes_read;
@@ -143,6 +157,16 @@ static bool read_uart(void *user_data, unsigned char *buf, size_t required_count
         fprintf(stderr, "Expected %zu bytes, but read %zu bytes\n", required_count, total_bytes_read);
         return false;
     }
+
+    #ifdef TRACE_UART
+    printf("Read %zu bytes from UART\n", total_bytes_read);
+    for (size_t i = 0; i < total_bytes_read; i++)
+    {
+        printf("%02X ", buf[i]);
+    }
+    printf("\n");
+    #endif
+
     return true; // Successfully read the required number of bytes
 }
 
@@ -154,7 +178,22 @@ static bool write_uart(void *user_data, const unsigned char *buf, size_t count)
         perror("Failed to write to UART");
         return false;
     }
-    return bytes_written == count;
+    if (bytes_written != count)
+    {
+        fprintf(stderr, "Expected to write %zu bytes, but wrote %zd bytes\n", count, bytes_written);
+        return false;
+    }
+
+    #ifdef TRACE_UART
+    printf("Wrote %zu bytes to UART\n", count);
+    for (size_t i = 0; i < count; i++)
+    {
+        printf("%02X ", buf[i]);
+    }
+    printf("\n");
+    #endif
+
+    return true;
 }
 
 /// @brief Log the message received.
@@ -218,9 +257,9 @@ void log_message_received(secil_message *message)
     }
 }
 
-bool initialise_comms_library(const char *uart_local, const char *uart_remote)
+bool initialise_comms_library_with_psuedo_uarts(const char *uart_local, const char *uart_remote)
 {
-    // Create pseudo UARTs using socat
+    // If we are given two UARTs, create pseudo UARTs using socat
     if (!create_psuedo_uarts_via_socat(uart_local, uart_remote))
     {
         return false;
@@ -230,11 +269,9 @@ bool initialise_comms_library(const char *uart_local, const char *uart_remote)
     initialise_uart(uart_local);
 
     // Initialize the secil library with our read and write functions
-    if (!secil_init(
-            read_uart,
-            write_uart,
-            log_fn,
-            NULL))
+    secil_error_t result = secil_init(read_uart, write_uart, on_connect_fn, log_fn, NULL);
+
+    if (result != SECIL_OK)
     {
         perror("Failed to initialize secil library");
         return false;
@@ -242,3 +279,109 @@ bool initialise_comms_library(const char *uart_local, const char *uart_remote)
 
     return true;
 }
+
+bool initialise_comms_library(const char *uart_device)
+{
+    // Initialize a connection to the local UART
+    initialise_uart(uart_device);
+
+    // Ensure we set the UART to blocking mode, 115200 baud, 8 data bits, no parity, 1 stop bit
+    int result = fcntl(g_secil_context.uart_fd, F_SETFL, 0);
+    if (result == -1)
+    {
+        perror("Failed to set UART to blocking mode");
+        return false;
+    }
+
+    struct termios options;
+    result = tcgetattr(g_secil_context.uart_fd, &options);
+    if (result == -1)
+    {
+        perror("Failed to get UART attributes");
+        return false;
+    }
+
+    cfsetispeed(&options, B115200);
+    cfsetospeed(&options, B115200);
+    options.c_cflag |= (CLOCAL | CREAD); // Enable receiver, ignore modem control lines
+    options.c_cflag &= ~PARENB;          // No parity
+    options.c_cflag &= ~CSTOPB;          // 1 stop bit
+    options.c_cflag &= ~CSIZE;           // Clear data bits setting
+    options.c_cflag |= CS8;              // 8 data bits
+
+    // We also need to prevent \r being translated to \n on input
+    options.c_iflag &= ~(INLCR | ICRNL | IGNCR); // No CR to NL translation on input
+    options.c_oflag &= ~OPOST;           
+    
+    tcsetattr(g_secil_context.uart_fd, TCSANOW, &options);
+
+    // Initialize the secil library with our read and write functions
+    secil_error_t initResult = secil_init(read_uart, write_uart, on_connect_fn, log_fn, NULL);
+    if (initResult != SECIL_OK)
+    {
+        printf("Failed to initialize secil library: %s\n", secil_error_string(initResult));
+        return false;
+    }
+
+    return true;
+}
+
+void test_uart_loopback()
+{
+    // Just read some chars from the UART until we get a newline
+    char buffer[256];
+    printf("Loopback test - Start typing characters to read from the UART. Automatically stops once we receive a newline.\n");
+
+    // read into buffer until newline or buffer full
+    scanf(" %[^\n]", buffer); // Read string with spaces
+
+    // Now do the loopback test
+    secil_error_t result = secil_loopback_test(buffer);
+    if (result == SECIL_OK)
+    {
+        printf("Loopback test successful. Sent and received: %s\n", buffer);
+    }
+    else
+    {
+        printf("Loopback test failed with error code: %s\n", secil_error_string(result));
+    }
+}
+
+static void receive_thread()
+{
+   secil_message payload;
+
+   while (1)
+   {
+      secil_error_t result = secil_receive(&payload);
+      switch (result)
+      {
+        case SECIL_OK:
+           log_message_received(&payload);
+           break;
+        case SECIL_ERROR_READ_TIMEOUT:
+            // Timeout waiting for message - not an error, just continue waiting
+            break;
+        default:
+            // Some other error occurred
+            printf("Failed to decode message: %s\n", secil_error_string(result));
+            break;
+      }
+   }
+}
+
+void launch_receive_thread()
+{
+   printf("Launching receive thread...\n");
+
+   pthread_t thread_id;
+   if (pthread_create(&thread_id, NULL, (void*(*)(void*))receive_thread, NULL) != 0)
+   {
+      perror("Failed to create receive thread");
+   }
+   else
+   {
+      pthread_detach(thread_id); // Detach the thread to allow it to run independently
+      printf("Receive thread launched successfully.\n");
+   }
+}  

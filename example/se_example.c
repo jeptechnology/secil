@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h> // For sleep function
 
 #include "common.h"
 #include "secil.h"
@@ -8,13 +9,31 @@ int main()
    printf("This program is pretending to be the SE chip using the comms library.\n");
 
    // Initialize the communication library with pseudo UARTs
-   if (!initialise_comms_library("/tmp/ttySE", "/tmp/ttyEME"))
+   // if (!initialise_comms_library("/dev/ttyUSB0"))
+   if (!initialise_comms_library_with_psuedo_uarts("/tmp/ttySE", "/tmp/ttyEME"))
    {
       fprintf(stderr, "Failed to initialize communication library.\n");
       return 1;
    }
 
    printf("SE Comms Library initialized successfully.\n");
+
+   printf("Starting up as client...\n");
+
+   secil_error_t startup_result = SECIL_ERROR_READ_TIMEOUT;
+
+   while (startup_result != SECIL_OK)
+   {
+      startup_result = secil_startup(secil_operating_mode_t_CLIENT);
+      if (startup_result != SECIL_OK)
+      {
+         fprintf(stderr, "Startup failed: %s\n", secil_error_string(startup_result));
+         printf("Retrying in 5 seconds...\n");
+         sleep(5);
+      }
+   }
+
+   launch_receive_thread();
 
    int option;
    
@@ -24,7 +43,7 @@ int main()
       printf(" 1. Send Accessory State\n");
       printf(" 2. Send Auto Wake\n");
       printf(" 3. Send Away Mode\n");
-      printf(" 4. Receive Messages\n");
+      printf(" 4. UART loopback test\n");
       printf(" 5. Exit\n");
       printf("Please select an option (1-5):\n");
 
@@ -59,20 +78,7 @@ int main()
             }
             break;
          case 4:
-           while(1) 
-           {
-               secil_message payload;
-
-               if (secil_receive(&payload))
-               {
-                  log_message_received(&payload);
-               }
-               else
-               {
-                  printf("Failed to receive message.\n");
-                  break;
-               }
-            }
+            test_uart_loopback();
             break;
          case 5:
             printf("Exiting...\n");
