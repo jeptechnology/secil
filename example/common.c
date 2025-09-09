@@ -142,7 +142,8 @@ bool read_uart(void *user_data, unsigned char *buf, size_t required_count)
         if (bytes_read < 0)
         {
             perror("Failed to read from UART");
-            return false;
+            sleep(1); // Wait a bit before trying again
+            bytes_read = 0; // Try again
         }
         
         total_bytes_read += bytes_read;

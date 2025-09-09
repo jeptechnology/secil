@@ -16,6 +16,10 @@
         } \
     } while (0)
 
+#define HEADER_SIZE 4
+#define FOOTER_SIZE 4
+#define MAX_MESSAGE_SIZE (HEADER_SIZE + secil_message_size + FOOTER_SIZE)
+
 static struct
 {
     secil_read_fn read_callback;
@@ -25,6 +29,10 @@ static struct
     secil_operating_mode_t mode;
     char remote_version[32]; // Version string of the remote end
     void *user_data; // User data pointer passed to callbacks
+
+    uint8_t outgoingMessage[MAX_MESSAGE_SIZE]; // Buffer for encoding messages
+    uint8_t incomingMessage[MAX_MESSAGE_SIZE]; // Buffer for decoding messages
+
 } state;
 
 static secil_error_t secil_send(const secil_message *message);
@@ -51,20 +59,18 @@ static void secil_log(secil_log_severity_t severity, const char *message)
 }
 
 /// @brief Callback function for reading from the stream.
-/// @param stream - The stream.
 /// @param buf - The buffer.
 /// @param count - The count.
 /// @return true if the read was successful, false otherwise.
-static bool secil_read_callback(pb_istream_t *stream, pb_byte_t *buf, size_t count)
+static bool secil_read(pb_byte_t *buf, size_t count)
 {
     return state.read_callback(state.user_data, buf, count);
 }
 
 /// @brief Callback function for writing to the stream.
-/// @param stream - The stream.
 /// @param buf - The buffer.
 /// @param count - The count.
-static bool secil_write_callback(pb_ostream_t *stream, const pb_byte_t *buf, size_t count)
+static bool secil_write(const pb_byte_t *buf, size_t count)
 {
     return state.write_callback(state.user_data, buf, count);
 }
@@ -79,44 +85,41 @@ static void secil_notify_on_connect()
     }
 }
 
+/// @brief Create a CRC check for the given memory block.
+/// @param crc Initial CRC value.
+/// @param mem Pointer to the memory block.
+/// @param len Length of the memory block.
+/// @return The computed CRC value.
+static uint16_t crc16arc_bit(uint16_t crc, void const *mem, size_t len) 
+{
+    const uint8_t *data = (const uint8_t*)(mem);
+    if (data == NULL)
+        return 0;
+        
+    for (size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (unsigned k = 0; k < 8; k++) {
+            crc = crc & 1 ? (crc >> 1) ^ 0xa001 : crc >> 1;
+        }
+    }
+    return crc;
+}
+
+extern pb_istream_t pb_istream_from_buffer(const pb_byte_t *buf, size_t msglen);
+extern pb_ostream_t pb_ostream_from_buffer(pb_byte_t *buf, size_t bufsize);
+
 /// @brief Creates an pb input stream from the given state.
 /// @return An instance of a pb_istream_t structure.
-static pb_istream_t secil_create_istream()
+static pb_istream_t secil_create_istream(uint16_t msglen)
 {
-    pb_istream_t stream;
-    stream.callback = &secil_read_callback;
-    stream.state = state.user_data;
-    stream.bytes_left = 4096; // 4KB max message size: adjust as needed
-#ifndef PB_NO_ERRMSG
-    stream.errmsg = NULL;
-#endif
-    return stream;
+    return pb_istream_from_buffer(state.incomingMessage + 4, msglen);
 }
 
 /// @brief Creates an pb output stream from the given state.
 /// @return An instance of a pb_ostream_t structure.
 static pb_ostream_t secil_create_ostream()
 {
-    pb_ostream_t stream;
-    stream.callback = &secil_write_callback;
-    stream.state = state.user_data;
-    stream.max_size = 4096; // 4KB max message size: adjust as needed
-    stream.bytes_written = 0;
-    stream.errmsg = NULL;
-    return stream;
-}
-
-static secil_error_t secil_skip_to_next_null(pb_istream_t *stream)
-{
-    RETURN_IF_ERROR(secil_io_callbacks_valid(), "I/O callbacks not set.");
-    pb_byte_t byte;
-    while (state.read_callback(state.user_data, &byte, 1) && byte != 0);
-    if (byte != 0)
-    {
-        secil_log(secil_LOG_ERROR, "Failed to find null terminator in stream.");
-        return SECIL_ERROR_READ_FAILED;
-    }
-    return SECIL_OK;
+    return pb_ostream_from_buffer(state.outgoingMessage + 4, sizeof(state.outgoingMessage) - 4); // Leave space for header
 }
 
 secil_error_t secil_init(secil_read_fn read_callback,
@@ -226,6 +229,32 @@ static secil_error_t secil_handle_remote_restarted(secil_message *handshake_mess
     return SECIL_OK;
 }
 
+static secil_error_t secil_read_next_header()
+{
+    // First try reading the full header at once
+    if (!secil_read(state.incomingMessage, 4))
+    {
+        return SECIL_ERROR_READ_FAILED;
+    }
+
+    while (true)
+    {
+        // Check for header magic bytes
+        if (state.incomingMessage[0] == 0xCA && state.incomingMessage[1] == 0xFE)
+        {
+            // Valid header found
+            return SECIL_OK;
+        }
+
+        // Shift the buffer left by one byte and continue reading
+        memmove(state.incomingMessage, state.incomingMessage + 1, 1);
+        if (!secil_read(state.incomingMessage + 1, 1))
+        {
+            return SECIL_ERROR_READ_FAILED;
+        }
+    }
+}
+
 /// @brief Internal implementation of secil_receive
 /// @param message 
 /// @return 
@@ -239,13 +268,42 @@ static secil_error_t secil_receive_internal(secil_message *message)
         return SECIL_ERROR_INVALID_PARAMETER;
     }
 
-    pb_istream_t stream = secil_create_istream();
+    RETURN_IF_ERROR(secil_read_next_header(), "Failed to read message header.");
+
+    // Read message length from header
+    uint16_t message_length = (uint16_t)state.incomingMessage[2] | ((uint16_t)state.incomingMessage[3] << 8);
+    if (message_length > secil_message_size)
+    {
+        secil_log(secil_LOG_ERROR, "Incoming message too large.");
+        return SECIL_ERROR_MESSAGE_TOO_LARGE;
+    }
+
+    // Read the message body
+    if (!secil_read(state.incomingMessage + 4, message_length + FOOTER_SIZE))
+    {
+        secil_log(secil_LOG_ERROR, "Failed to read message body.");
+        return SECIL_ERROR_READ_FAILED;
+    }
+    // Verify footer magic bytes
+    if (state.incomingMessage[message_length + 6] != 0xFA || state.incomingMessage[message_length + 7] != 0xDE)
+    {
+        secil_log(secil_LOG_ERROR, "Invalid footer magic bytes.");
+        return SECIL_ERROR_READ_FAILED;
+    }
+
+    // Verify the CRC
+    uint16_t received_crc = (uint16_t)state.incomingMessage[message_length + 4] | ((uint16_t)state.incomingMessage[message_length + 5] << 8);
+    uint16_t computed_crc = crc16arc_bit(0, state.incomingMessage, message_length + 4);
+    if (received_crc != computed_crc)
+    {
+        secil_log(secil_LOG_ERROR, "Invalid message CRC.");
+        return SECIL_ERROR_READ_FAILED;
+    }
 
     message->which_payload = 0;
 
-    secil_skip_to_next_null(&stream);
-
-    // Decode a message
+    // Decode the message from
+    pb_istream_t stream = secil_create_istream(message_length);
     if (!pb_decode_ex(&stream, secil_message_fields, message, PB_DECODE_NOINIT | PB_DECODE_DELIMITED))
     {
         secil_log(secil_LOG_WARNING, "Cannot decode message");
@@ -282,6 +340,12 @@ secil_error_t secil_receive(secil_message *message)
     }
 }
 
+/// @brief Send a secil message
+/// @param message The message to send
+/// @note The message is sent with a header consisting of two null bytes followed by the message length as two bytes (little-endian).
+///       The message itself is encoded using nanopb with a varint length prefix.
+///       A footer is then added consisting of a CRC16-ARC checksum of the header and message.
+/// @return SECIL_OK if the message was sent successfully, otherwise an error code.
 static secil_error_t secil_send(const secil_message *message)
 {
     RETURN_IF_ERROR(secil_io_callbacks_valid(), "I/O callbacks not set.");
@@ -294,16 +358,33 @@ static secil_error_t secil_send(const secil_message *message)
 
     pb_ostream_t stream = secil_create_ostream();
 
-    // Write null terminator, followed by the message to the stream
-    pb_byte_t null_byte = 0;
-    if (pb_write(&stream, &null_byte, 1) && pb_encode_ex(&stream, secil_message_fields, message, PB_ENCODE_DELIMITED))
+    if (!pb_encode_ex(&stream, secil_message_fields, message, PB_ENCODE_DELIMITED))
     {
-        return SECIL_OK;
+        return SECIL_ERROR_ENCODE_FAILED;
     }
-    else
+
+    // Now write the header, which is two "magic" bytes, followed by the message length as two bytes (little-endian)
+    // header magic bytes (0xCAFE)
+    state.outgoingMessage[0] = 0xCA;
+    state.outgoingMessage[1] = 0xFE;
+    state.outgoingMessage[2] = (uint8_t)(stream.bytes_written & 0xFF);
+    state.outgoingMessage[3] = (uint8_t)((stream.bytes_written >> 8) & 0xFF);
+
+    // calculate CRC of header + message
+    uint16_t crc = crc16arc_bit(0, state.outgoingMessage, stream.bytes_written + HEADER_SIZE);
+    state.outgoingMessage[stream.bytes_written + 4] = (uint8_t)(crc & 0xFF);
+    state.outgoingMessage[stream.bytes_written + 5] = (uint8_t)((crc >> 8) & 0xFF);
+    // footer magic bytes (0xFADE)
+    state.outgoingMessage[stream.bytes_written + 6] = 0xFA;
+    state.outgoingMessage[stream.bytes_written + 7] = 0xDE;
+
+    if (!secil_write(state.outgoingMessage,  HEADER_SIZE + stream.bytes_written + FOOTER_SIZE))
     {
-        return SECIL_ERROR_SEND_FAILED;
+        secil_log(secil_LOG_ERROR, "Failed to write message.");
+        return SECIL_ERROR_WRITE_FAILED;
     }
+
+    return SECIL_OK;
 }
 
 #define SECIL_SEND_MSG(MSG, FIELD, VALUE) \
@@ -450,8 +531,10 @@ static secil_error_t secil_send_startup_message(secil_operating_mode_t mode, boo
     return secil_send(&message);
 }
 
-static secil_error_t secil_receive_handshake(secil_operating_mode_t expected_mode)
+static secil_error_t secil_receive_handshake(secil_operating_mode_t our_mode)
 {
+    secil_operating_mode_t expected_mode = (our_mode == secil_operating_mode_t_CLIENT) ? secil_operating_mode_t_SERVER : secil_operating_mode_t_CLIENT;
+
     // Wait for the server's startup message
     secil_message response_message;
     RETURN_IF_ERROR(secil_receive_internal(&response_message), NULL);
@@ -478,35 +561,30 @@ static secil_error_t secil_receive_handshake(secil_operating_mode_t expected_mod
     strncpy(state.remote_version, response_message.payload.handshake.version, sizeof(state.remote_version) - 1);
     state.remote_version[sizeof(state.remote_version) - 1] = '\0'; // Ensure null termination
 
+    // If the handshake message had needs_ack set, we must respond with our own handshake message
+    if (response_message.payload.handshake.needs_ack)
+    {
+        RETURN_IF_ERROR(secil_send_startup_message(our_mode, false), "Failed to send handshake ack to remote end.");
+    }
+
     return SECIL_OK;
 }
 
 static secil_error_t secil_startup_internal(secil_operating_mode_t mode, bool fail_on_version_mismatch)
 {
+    if (mode == secil_operating_mode_t_UNINITIALIZED)
+    {
+        secil_log(secil_LOG_ERROR, "Cannot invoke startup - Invalid mode.");
+        return SECIL_ERROR_INVALID_PARAMETER;
+    }
+
     // When starting up, we always send an initial startup message
     // If we are a client, we then wait for the server's response
     // If we are a server, we wait for the client's startup message and then respond
     // NOTE: When we are a server and we are restarting, the client will receive a startup message from us and
     //       should respond with its own startup message again. It allows for the client to detect that the server has restarted.
     RETURN_IF_ERROR(secil_send_startup_message(mode, true), "Failed to send startup message.");
-
-    if (mode == secil_operating_mode_t_CLIENT)
-    {
-        // In client mode, after we send our startup message, we expect a server's handshake response
-        RETURN_IF_ERROR(secil_receive_handshake(secil_operating_mode_t_SERVER), "Failed to receive server handshake response.");
-    }
-    else if (mode == secil_operating_mode_t_SERVER)
-    {
-        // In server mode, after we send our startup message, we expect a client's handshake response
-        RETURN_IF_ERROR(secil_receive_handshake(secil_operating_mode_t_CLIENT), "Failed to receive client handshake response.");
-        // But we also must send our startup message again to the client, so it knows we are ready
-        RETURN_IF_ERROR(secil_send_startup_message(mode, false), "Failed to send server startup message after client handshake.");
-    }
-    else
-    {
-        secil_log(secil_LOG_ERROR, "Cannot invoke startup - Invalid mode.");
-        return SECIL_ERROR_INVALID_PARAMETER;
-    }
+    RETURN_IF_ERROR(secil_receive_handshake(mode), "Failed to receive server handshake response.");
 
     if (fail_on_version_mismatch)
     {
@@ -522,6 +600,7 @@ static secil_error_t secil_startup_internal(secil_operating_mode_t mode, bool fa
         }
     }
 
+    // Now confirm that we are fully initialized
     state.mode = mode;
 
     // Notify the application of the new connection
